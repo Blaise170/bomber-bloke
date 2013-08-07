@@ -1,8 +1,8 @@
-bomber-bloke
-============
+Bomb Riot
+=========
 
-Bomber Bloke (Arcade Game)
+Arcade game written in 1994 using Borland C++ IDE and the Borland Object Windows Library.
 
-Written in 1994 using Borland C++ IDE and the Borland Object Windows Library.
+Graphics by Russell Newman, code by Chris Moreton.
 
-Graphics designed by Russell Newman.
+![Bomb Riot screen shot](/bloke.gif)
