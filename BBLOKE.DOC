@@ -1,0 +1,12 @@
+Bomb bloke works on a timer.
+
+Every game cycle:
+
+  1) Player positions (based on the direction attributes of each player)
+  2) Bomb Timers (on 0, explosion is triggered)
+  3) Explosion Timers (any existing explosions are added to a Maze
+	  size array so that they can be drawn properly
+  4) Computer AI, changing the direction attributes of each player
+	  and maybe dropping a bomb
+  5) Draw Screen
+

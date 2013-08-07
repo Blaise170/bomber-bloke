@@ -1,0 +1,281 @@
+/****************************************************************************
+
+
+BBLOKE.RC
+
+produced by Borland Resource Workshop
+
+
+*****************************************************************************/
+
+#include "bbloke.rh"
+
+EXPLOSION RCDATA Explode.Wav
+EXPLOSIONOUCH RCDATA Explode2.Wav
+
+MENU_1 MENU 
+{
+ POPUP "&Game"
+ {
+  MENUITEM "&New Match\tF2", CM_START
+ }
+
+ POPUP "&Options"
+ {
+  MENUITEM "&Music\tM", CM_OPTIONSMUSIC
+  MENUITEM "&Sound\tS", CM_OPTIONSSOUND
+  MENUITEM SEPARATOR
+  MENUITEM "Run as fast as possible", CM_OPTIONSFAST
+ }
+
+ POPUP "&Help"
+ {
+  MENUITEM "&Contents\tF1", CM_HELP_CONTENTS
+  MENUITEM "&About", CM_HELP_ABOUT
+ }
+
+}
+
+BLOKED1 BITMAP "down1.bmp"
+BLOKED2 BITMAP "down2.bmp"
+FLOOR1SHADOW BITMAP "floor1sh.bmp"
+BLOKEL1 BITMAP "left1.bmp"
+BLOKEL2 BITMAP "left2.bmp"
+BLOKER1 BITMAP "right1.bmp"
+BLOKER2 BITMAP "right2.bmp"
+BLOKEU1 BITMAP "up1.bmp"
+BLOKEU2 BITMAP "up2.bmp"
+BLEFTWL BITMAP "bleftwl.bmp"
+BRIGHTWL BITMAP "brightwl.bmp"
+HORIZWL BITMAP "horiwall.bmp"
+RIGHTWL BITMAP "rightwal.bmp"
+TLEFTWL BITMAP "tleftwl.bmp"
+TRIGHTWL BITMAP "trightwl.bmp"
+LEFTWL BITMAP "leftwall.bmp"
+BOMB1 BITMAP "bomb1.bmp"
+BOMB2 BITMAP "bomb2.bmp"
+BOMB3 BITMAP "bomb3.bmp"
+EXPLLEFT BITMAP "explleft.bmp"
+EXPLRIGHT BITMAP "explrigh.bmp"
+EXPLUP BITMAP "explup.bmp"
+EXPLDOWN BITMAP "expldown.bmp"
+EXPLCENT BITMAP "explcent.bmp"
+EXPLHORIZ BITMAP "explhori.bmp"
+EXPLVERT BITMAP "explvert.bmp"
+EXPLTUP BITMAP "expltup.bmp"
+EXPLTDOWN BITMAP "expltdow.bmp"
+EXPLTLEFT BITMAP "expltlef.bmp"
+EXPLTRIGHT BITMAP "expltrig.bmp"
+EXPLCUPLEFT BITMAP "expluplf.bmp"
+EXPLCUPRIGHT BITMAP "expluprg.bmp"
+EXPLCDOWNLEFT BITMAP "expldnlf.bmp"
+EXPLCDOWNRIGHT BITMAP "expldnrg.bmp"
+EXPLCENT2 BITMAP "xc.bmp"
+EXPLCUPLEFT2 BITMAP "xcul.bmp"
+EXPLCUPRIGHT2 BITMAP "xcur.bmp"
+EXPLCDOWNLEFT2 BITMAP "xcdl.bmp"
+EXPLCDOWNRIGHT2 BITMAP "xcdr.bmp"
+EXPLLEFT2 BITMAP "xl.bmp"
+EXPLRIGHT2 BITMAP "xr.bmp"
+EXPLUP2 BITMAP "xu.bmp"
+EXPLDOWN2 BITMAP "xd.bmp"
+EXPLTUP2 BITMAP "xtu.bmp"
+EXPLTDOWN2 BITMAP "xtd.bmp"
+EXPLTLEFT2 BITMAP "xtl.bmp"
+EXPLTRIGHT2 BITMAP "xtr.bmp"
+EXPLHORI2 BITMAP "xh.bmp"
+EXPLVERT2 BITMAP "xv.bmp"
+DEF1 BITMAP "def1.bmp"
+DEF2 BITMAP "def2.bmp"
+DEF3 BITMAP "def3.bmp"
+DEF4 BITMAP "def4.bmp"
+DEAD BITMAP "dead.bmp"
+VICTORY BITMAP "vicory.bmp"
+DEF5 BITMAP "def5.bmp"
+DEF6 BITMAP "def6.bmp"
+CRATE1 BITMAP "crate1.bmp"
+CRATE2 BITMAP "crate2.bmp"
+CRATE3 BITMAP "crate3.bmp"
+ONE BITMAP "1.bmp"
+TWO BITMAP "2.bmp"
+THREE BITMAP "3.bmp"
+FOUR BITMAP "4.bmp"
+FIVE BITMAP "5.bmp"
+SIX BITMAP "6.bmp"
+SEVEN BITMAP "7.bmp"
+EIGHT BITMAP "8.bmp"
+NINE BITMAP "9.bmp"
+
+
+TEMP BITMAP "temp.bmp"
+
+
+ZERO BITMAP "0.bmp"
+
+
+MENU_1 ACCELERATORS 
+{
+ VK_F2, CM_START, VIRTKEY
+ VK_F1, CM_HELP_CONTENTS, VIRTKEY
+ VK_M, CM_OPTIONSMUSIC, VIRTKEY
+ VK_S, CM_OPTIONSSOUND, VIRTKEY
+}
+
+
+BOMBUP BITMAP "bombup.bmp"
+
+
+SPEEDUP BITMAP "speedup.bmp"
+
+
+BOOTUP BITMAP "bootup.bmp"
+
+
+FLAMEUP BITMAP "flameup.bmp"
+
+
+
+CRATE21 BITMAP "crate21.bmp"
+CRATE22 BITMAP "crate22.bmp"
+CRATE23 BITMAP "crate23.bmp"
+CRATE31 BITMAP "crate41.bmp"
+CRATE32 BITMAP "crate42.bmp"
+CRATE33 BITMAP "crate43.bmp"
+CRATE41 BITMAP "crate31.bmp"
+CRATE42 BITMAP "crate32.bmp"
+CRATE43 BITMAP "crate33.bmp"
+
+PANEL BITMAP "panel.bmp"
+
+
+
+
+
+
+BLOCK1OUT BITMAP "block1o.bmp"
+
+
+BLOCK1IN BITMAP "block1i.bmp"
+
+
+BLOCK2OUT BITMAP "block2o.bmp"
+
+
+BLOCK2IN BITMAP "block2i.bmp"
+
+
+BLOCK3IN BITMAP "block3i.bmp"
+
+
+BLOCK3OUT BITMAP "block3o.bmp"
+
+
+BLOCK4IN BITMAP "block4i.bmp"
+
+
+BLOCK4OUT BITMAP "block4o.bmp"
+
+
+FLOOR1 BITMAP "floor1.bmp"
+
+
+FLOOR2 BITMAP "floor2.bmp"
+
+
+FLOOR3 BITMAP "floor3.bmp"
+
+
+FLOOR4 BITMAP "floor4.bmp"
+
+
+RIOT BITMAP "riot.bmp"
+
+
+WINNER1 BITMAP "winner1.bmp"
+
+
+WINNER2 BITMAP "winner2.bmp"
+
+
+WINNER3 BITMAP "winner3.bmp"
+
+OPTIONS DIALOG 14, 24, 244, 203
+STYLE DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
+CLASS "bordlg"
+CAPTION "Game Options"
+FONT 8, "MS Sans Serif"
+{
+ COMBOBOX IDC_RED, 54, 36, 60, 42, CBS_DROPDOWNLIST | WS_GROUP | WS_TABSTOP
+ COMBOBOX IDC_GREEN, 54, 54, 60, 42, CBS_DROPDOWNLIST | WS_GROUP | WS_TABSTOP
+ COMBOBOX IDC_BLUE, 54, 72, 60, 42, CBS_DROPDOWNLIST | WS_GROUP | WS_TABSTOP
+ COMBOBOX IDC_PURPLE, 54, 90, 60, 42, CBS_DROPDOWNLIST | WS_GROUP | WS_TABSTOP
+ COMBOBOX IDC_STYLE, 162, 36, 61, 58, CBS_DROPDOWNLIST | WS_GROUP | WS_TABSTOP
+ COMBOBOX IDC_ORDER, 162, 54, 61, 42, CBS_DROPDOWNLIST | WS_GROUP | WS_TABSTOP
+ EDITTEXT IDC_GAMES, 72, 152, 16, 12, WS_BORDER | WS_GROUP | WS_TABSTOP
+ PUSHBUTTON "Help", IDHELP, 18, 184, 50, 14, WS_GROUP | WS_TABSTOP
+ DEFPUSHBUTTON "OK", IDOK, 97, 184, 50, 14, BS_DEFPUSHBUTTON | WS_GROUP | WS_TABSTOP
+ PUSHBUTTON "Exit", IDCANCEL, 176, 184, 50, 14, WS_GROUP | WS_TABSTOP
+ CONTROL "", -1, "BorShade", BSS_GROUP | BSS_CAPTION | BSS_LEFT | WS_CHILD | WS_VISIBLE, 8, 11, 228, 108
+ LTEXT "Red", -1, 16, 39, 30, 8, NOT WS_GROUP
+ LTEXT "Green", -1, 16, 57, 30, 8, NOT WS_GROUP
+ LTEXT "Blue", -1, 16, 75, 30, 8, NOT WS_GROUP
+ LTEXT "Purple", -1, 16, 93, 30, 8, NOT WS_GROUP
+ LTEXT "Games to win", -1, 16, 154, 48, 8, NOT WS_GROUP
+ LTEXT "Style", -1, 132, 39, 24, 8, NOT WS_GROUP
+ LTEXT "Order", -1, 132, 57, 24, 8, NOT WS_GROUP
+ LTEXT "Player Controls", -1, 16, 18, 60, 8, NOT WS_GROUP
+ LTEXT "Maze Options", -1, 132, 18, 60, 8, NOT WS_GROUP
+ CONTROL "", -1, "BorShade", BSS_GROUP | BSS_CAPTION | BSS_LEFT | WS_CHILD | WS_VISIBLE, 8, 141, 229, 36
+ EDITTEXT IDC_MEGARIOT, 200, 152, 16, 12, WS_BORDER | WS_GROUP | WS_TABSTOP
+ LTEXT "Seconds before Mega-Riot", -1, 102, 154, 90, 8, NOT WS_GROUP
+ EDITTEXT IDC_MAZENUMBER, 188, 78, 16, 12, WS_BORDER | WS_GROUP | WS_TABSTOP
+ LTEXT "Maze number", -1, 132, 80, 48, 8, NOT WS_GROUP
+}
+
+ZEROS BITMAP "pathnum0.bmp"
+
+
+ONES BITMAP "pathnum1.bmp"
+
+
+TWOS BITMAP "pathnum2.bmp"
+
+
+THREES BITMAP "pathnum3.bmp"
+
+
+FOURS BITMAP "pathnum4.bmp"
+
+
+FIVES BITMAP "pathnum5.bmp"
+
+
+SIXES BITMAP "pathnum6.bmp"
+
+
+SEVENS BITMAP "pathnum7.bmp"
+
+
+EIGHTS BITMAP "pathnum8.bmp"
+
+
+NINES BITMAP "pathnum9.bmp"
+
+
+DRAW1 BITMAP "draw1.bmp"
+
+
+DRAW2 BITMAP "draw2.bmp"
+
+
+DRAW3 BITMAP "draw3.bmp"
+
+GETKEY DIALOG 29, 24, 161, 86
+STYLE DS_SYSMODAL | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
+CLASS "bordlg"
+CAPTION "GETKEY"
+FONT 8, "MS Sans Serif"
+{
+ LTEXT "", 9182, 36, 18, 90, 8
+ LTEXT "Press ESC for next player", -1, 36, 42, 90, 8
+}

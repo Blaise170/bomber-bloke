@@ -1,0 +1,2307 @@
+#include <owl\applicat.h>
+#include <owl\decframe.h>
+#include <owl\framewin.h>
+#include <owl\dc.h>
+#include <owl\gdiobjec.h>
+#include <\_source\bomb\bbloke.rh>
+#include <stdio.h>
+#include <stdlib.h>
+#include <conio.h>
+#include <wing.h>
+#include "wingstuf.h"
+#include <time.h>
+#include <io.h>
+#include <sys\stat.h>
+#include <fcntl.h>
+#pragma hdrstop
+#include "options.h"
+
+BOOL NumberDisplay=FALSE;
+
+int Timer[10]={0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int Calls[10]={0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int Temp[10];
+
+int ScreenX, ScreenY;
+
+#define StartTimer(a) Temp[(a)]=GetTickCount();
+#define EndTimer(a) Calls[(a)]++; Timer[(a)]+=(GetTickCount()-Temp[(a)]);
+
+//#define NODISPLAY
+
+#define BEGIN 0
+#define OPTIONSSCREEN 1
+#define PLAYING 2
+#define GAMEOVER 3
+#define MATCHOVER 4
+
+#define NONE 0
+#define LEFT 1
+#define RIGHT 2
+#define UP 3
+#define DOWN 4
+
+#define RED 0
+#define GREEN 1
+#define BLUE 2
+#define PURPLE 3
+
+#define WIN 0
+#define DRAW 1
+
+#define MAX_FRAMES_PS 17
+
+#define OPTIONSTUNE 0
+#define GAMETUNE 1
+#define MEGATUNE 2
+#define VICTORYTUNE 3
+#define DRAWTUNE 4
+
+#define MAZESIZEX 15
+#define MAZESIZEY 13
+#define PART 32
+#define SPEED 8
+#define BSIZE 32
+#define MAXBLOKES 4
+#define BOMBSTART 35 // counts down to 0 (1 each game cycle)
+#define MAXBOMBS 30 // for the bomb queue
+#define PULSELENGTH 5
+#define EXPLOSIONSTART 10
+#define STARTLIFE 13
+#define MAXCRATES 99
+#define CRATESTART 10
+#define FLAGSPEED 4
+
+int timercount;
+long oldtime, oldtime2;
+long Times640[480];
+
+uint Keys[MAXBLOKES][5]={
+{17, 37, 39, 38, 40},
+{45, 46, 34, 36, 35},
+{96, 97, 99, 101, 98},
+{20, 16, 90, 65, 220}
+};
+
+void far* ScreenBits;
+void far* MapBits;
+
+typedef struct {
+	int MazeX;
+	int MazeY;
+	int PulseState;
+	int PulseDir;
+	int Id;
+} PowerUpStruct;
+
+typedef struct {
+	int MazeX;
+	int MazeY;
+	int Timer;
+	int PulseState;
+	int Strength;
+	int Owner;
+} BombStruct;
+
+typedef struct {
+	int MazeX;
+	int MazeY;
+	int Timer;
+} CrateStruct;
+
+typedef struct {
+	int UpKey, DownKey, LeftKey, RightKey;
+	int LeftCount, RightCount, UpCount, DownCount;
+	int Direction;
+	int LastDirection;  // Always equals Direction unless Direction=NONE
+	int BombStrength;
+	int Speed;
+	int Boot;
+	int NumBombs;
+	int Life;  // Alive=STARTLIFE, on death countdown to 0 with animation
+	int XPos, YPos;
+	int Points;
+	int Control;  // Computer Controller?
+} BlokeStruct;
+
+typedef struct {
+	int Timer;
+	int CentreX, CentreY;
+	int Left, Right, Up, Down;
+	int Owner;
+} ExplosionStruct;
+
+class TBombBlokeWin : public TWindow
+{
+	public:
+	  TBombBlokeWin();
+	  ~TBombBlokeWin();
+  protected:
+	 BOOL CanClose();
+	 void SetupWindow();
+	 void GameCycle();
+	 void EvTimer(uint);
+	 void EvKeyDown(uint, uint, uint);
+	 void EvLButtonDown(uint, TPoint&);
+	 void EvRButtonDown(uint, TPoint&);
+	 void EvKeyUp(uint, uint, uint);
+	 virtual void Paint(TDC& dc, BOOL erase, TRect& rect);
+	 void CmStart();
+	 void CmHelp(WPARAM);
+  private:
+	 void StoredUpdate();
+    void Store(int, int, int, int, int);
+	 int FirstTime, WaveRequest;
+	 int IsVictory;
+	 BombStruct BombQueue[MAXBOMBS];
+	 ExplosionStruct ExplosionQueue[MAXBOMBS];
+	 int NUMBLOKES, GamesToWin, Style, Order, MazeNumber;
+	 HINSTANCE h;
+	 HDC MemDc, MapDc;
+	 int Quit;
+    BOOL Sound, Music;
+	 int TimeOut, IsMegaRiot;
+	 int FlagPos, FlagDir, Winner;
+	 int Maze[MAZESIZEX][MAZESIZEY];
+	 void DibXY(void far* Bits, int StartX, int StartY, TDib* Dib,
+			  int Detect=FALSE, int ColourOffset=0, int Low=0, int High=0);
+	 void GrabSprite(void far* Bits, long StartX, long StartY, TDib* Dib);
+	 void ResetGame();
+	 void NewPowerUp(int, int);
+	 void DrawScores();
+    BOOL InSight(int, int, int, int, int);
+	 void UpdateOptionsScreen();
+	 void Update(int, int, int, int);
+	 void MessageNumber(int);
+//	 BOOL Trapped(int Bloke, int Maze[MAZESIZEX][MAZESIZEY]);
+	 int InRect(TPoint&, int, int, int, int);
+    int CanEscape(int, int, int, int, int Maze[MAZESIZEX][MAZESIZEY]);
+	 void DrawNumber(void far* Bits, int CentreX, int y, int n);
+	 BOOL CanMove(int, int, int Maze[MAZESIZEX][MAZESIZEY]);
+	 TPalette* BombBlokePalette;
+	 int WhatSquareX(int Bloke);
+	 int WhatSquareY(int Bloke);
+	 BOOL Fast;
+	 void CeMusic(TCommandEnabler&);
+	 void CeSound(TCommandEnabler&);
+	 void CeFast(TCommandEnabler&);
+	 void CmOptions(WPARAM);
+	 void Explode(BombStruct Bomb);
+	 void Detonate(int MazeX, int MazeY);
+	 void SmashCrate(int MazeX, int MazeY);
+	 void DropBomb(int Bloke);
+	 void DrawScreen();
+    void NextMidi(int);
+	 void SetupStaticBlokes();
+	 void GameLoop();
+	 BOOL NearAnotherBloke(int);
+	 int Exploded[MAZESIZEX][MAZESIZEY];
+	 int SpeedPercent, TimeLeft;
+	 int LastCrate;
+	 int CloseRequest;
+	 int GameStage;
+	 int WinState;
+	 int PressPulse1;
+	 int PressPulse2;
+	 int ResetRequest, Terminate;
+    BOOL Slowed;
+	 TDib *BlokeU[2];
+	 TDib *BlokeD[2];
+	 TDib *BlokeL[2];
+	 TDib *BlokeR[2];
+	 TDib *Floor;
+	 TDib *Panel;
+	 TDib *LastBloke[MAXBLOKES];
+	 TDib *BlockOut, *BlockIn;
+	 TDib *Crate[3];
+	 TDib *PressAKey;
+	 TDib *PressBackGround;
+	 TDib *Bomb[4]; // One for each pulse state
+	 TDib *ExplodeVert[2], *ExplodeHoriz[2], *ExplodeCentre[2];
+	 TDib *ExplodeUp[2], *ExplodeDown[2], *ExplodeLeft[2], *ExplodeRight[2];
+	 TDib *ExplodeTLeft[2], *ExplodeTRight[2], *ExplodeTUp[2], *ExplodeTDown[2];
+	 TDib *ExplodeCUpRight[2], *ExplodeCDownRight[2], *ExplodeCUpLeft[2], *ExplodeCDownLeft[2];
+	 TDib *PowerUp[4];
+	 TDib *OpenScreen;
+	 TDib *Def[7];
+	 TDib *Number[10];
+	 TDib *Victory;
+	 MCI_OPEN_PARMS mciOpen;
+	 MCI_PLAY_PARMS mciPlay, m0, m1, m2, m3, m4;
+	 char b[129];
+	 unsigned long rtrn;
+	 int id;
+
+	 BlokeStruct BlokeList[MAXBLOKES];
+	 CrateStruct CrateList[MAXCRATES];
+	 PowerUpStruct PowerUpList[MAXCRATES];
+	 LPVOID ExplodeWave, ExplodeWaveOuch;
+	 void DrawSmallNumber(char far* Screen, int x, int y, int Number);
+	 TDib *NumberDib[10];
+  DECLARE_RESPONSE_TABLE(TBombBlokeWin);
+};
+
+TBombBlokeWin::TBombBlokeWin()
+  : TWindow(0, 0, 0)
+{
+	Attr.W=640;
+	Attr.H=416;
+	GameStage=0;
+	NUMBLOKES=4;
+	TimeOut=60;
+	GamesToWin=3;
+	Style=RANDOM;
+	Order=RANDOM;
+   MazeNumber=0;
+	PressPulse1=0;
+	WaveRequest=0;
+	PressPulse2=0;
+	Music=Sound=TRUE;
+   Fast=FALSE;
+	CloseRequest=FALSE;
+	SpeedPercent=100;
+	TimeLeft=TimeOut;
+#ifdef CONFIGURE
+	int handle;
+	if ((handle=open("keys.cfg", O_RDONLY | O_BINARY, S_IREAD | S_IWRITE))!=-1) {
+		read(handle, &Keys, 20*sizeof(uint));
+	}
+	close(handle);
+#endif
+}
+
+BOOL
+TBombBlokeWin::CanClose()
+{
+	TWindow::CanClose();
+	if (CloseRequest || GameStage==0) {
+#ifdef CONFIGURE
+	  int handle = creat("keys.cfg", S_IREAD | S_IWRITE);
+	  write(handle, &Keys, 20*sizeof(uint));
+	  close(handle);
+#endif
+	  return TRUE;
+	}
+	NextMidi(-1);
+	if (Sound)
+	  sndPlaySound((char *)ExplodeWave, SND_SYNC | SND_MEMORY);
+//	KillTimer(1);
+	Terminate=TRUE;
+	CloseRequest=TRUE;
+	return FALSE;
+}
+
+void
+TBombBlokeWin::ResetGame()
+{
+	int i;
+	NextMidi(GAMETUNE);
+	int StartX[MAXBLOKES], StartY[MAXBLOKES];
+	FILE* f=fopen("bombmaze.txt", "r");
+	int MazeStyle;
+	if (Style==VARIOUS) {
+		MazeStyle=random(4)+1;
+	} else {
+		MazeStyle=Style;
+	}
+	if (MazeStyle<1 || MazeStyle>4)
+	  MazeStyle=1;
+	if (Order==RANDOM) {
+	  MazeNumber=random(8);
+	}
+	if (Order==SEQUENCE) {
+	  MazeNumber++;
+	  if (MazeNumber>7)
+		 MazeNumber=0;
+	}
+
+	char c;
+	BOOL DefaultMaze=FALSE;
+	int m, y, x;
+	for (m=0; m<=MazeNumber && !DefaultMaze; m++) {
+	  LastCrate=-1;
+	  for (y=0; y<MAZESIZEY && !DefaultMaze; y++) {
+		 for (x=0; x<MAZESIZEX && !DefaultMaze; x++) {
+		  if (x*y==0 || x==MAZESIZEX-1 || y==MAZESIZEY-1) {
+			 c='O';
+		  } else {
+			 c=fgetc(f);
+		  }
+		  if (c>='a' && c<='z')
+		    c-=32;  
+		  if (c=='\n')
+			 c=fgetc(f);
+		  if (c=='R') {
+			 StartX[0]=x;
+			 StartY[0]=y;
+			 c='f';
+		  }
+		  if (c=='G') {
+			 StartX[1]=x;
+			 StartY[1]=y;
+			 c='f';
+		  }
+		  if (c=='B') {
+			 StartX[2]=x;
+			 StartY[2]=y;
+			 c='f';
+		  }
+		  if (c=='P') {
+			 StartX[3]=x;
+			 StartY[3]=y;
+			 c='f';
+		  }
+		  if (c=='E')
+			 c='f';
+		  if (c=='.')
+			 c='f';
+		  if (c=='C' || c=='c') {
+			 if (++LastCrate==MAXCRATES) {
+				MessageBox("Too many Crates in that maze!!!!");
+            DefaultMaze=TRUE;
+			 } else {
+				CrateList[LastCrate].MazeX=x;
+				CrateList[LastCrate].MazeY=y;
+				CrateList[LastCrate].Timer=CRATESTART;
+			 }
+		  }
+		  if (c!='f' && c!='C' && c!='E' && c!='O' && c!='I') {
+			 ::MessageBox(HWindow, "Maze file error - Using default maze.", "Bomb Riot", MB_OK);
+			 DefaultMaze=TRUE;
+		  }
+		  Maze[x][y]=c;
+		 }
+	  }
+	  do { c=fgetc(f); } while (c!='\n' && c!=EOF);
+	  if (c!=EOF) {
+		 do { c=fgetc(f); } while (c!='\n' && c!=EOF);
+	  }
+	}
+
+	fclose(f);
+
+// ************ Blah Blah
+	switch (MazeStyle) {
+	  case 1:	Floor=new TDib(h, FLOOR1); BlockOut=new TDib(h, BLOCK1OUT);
+					BlockIn=new TDib(h, BLOCK1IN);
+					Crate[0]=new TDib(h, CRATE1); Crate[1]=new TDib(h, CRATE2);
+					Crate[2]=new TDib(h, CRATE3);
+					break;
+	  case 2:	Floor=new TDib(h, FLOOR2); BlockOut=new TDib(h, BLOCK2OUT);
+					BlockIn=new TDib(h, BLOCK2IN);
+					Crate[0]=new TDib(h, CRATE21); Crate[1]=new TDib(h, CRATE22);
+					Crate[2]=new TDib(h, CRATE23);
+					break;
+	  case 3:	Floor=new TDib(h, FLOOR3); BlockOut=new TDib(h, BLOCK3OUT);
+					BlockIn=new TDib(h, BLOCK3IN);
+					Crate[0]=new TDib(h, CRATE31); Crate[1]=new TDib(h, CRATE32);
+					Crate[2]=new TDib(h, CRATE33);
+					break;
+	  case 4:	Floor=new TDib(h, FLOOR4); BlockOut=new TDib(h, BLOCK4OUT);
+					BlockIn=new TDib(h, BLOCK4IN);
+					Crate[0]=new TDib(h, CRATE41); Crate[1]=new TDib(h, CRATE42);
+					Crate[2]=new TDib(h, CRATE43);
+	}
+// ************ Blah Blah
+
+	if (DefaultMaze) {
+		for (y=0; y<MAZESIZEY; y++)
+		  for (x=0; x<MAZESIZEX; x++)
+			  if (x*y==0 || x==MAZESIZEX-1 || y==MAZESIZEY-1)
+				  Maze[x][y]='O';
+			  else
+              Maze[x][y]='f';
+		StartX[0]=1; StartY[0]=1;
+		StartX[1]=13; StartY[1]=1;
+		StartX[2]=13; StartY[2]=11;
+		StartX[3]=1; StartY[3]=11;
+	}
+
+	h=GetApplication()->GetInstance();
+	for (i=0; i<NUMBLOKES; i++) {
+		BlokeList[i].XPos=StartX[i]*PART;
+		BlokeList[i].YPos=StartY[i]*PART;
+		BlokeList[i].UpKey=FALSE;
+		BlokeList[i].DownKey=FALSE;
+		BlokeList[i].LeftKey=FALSE;
+		BlokeList[i].RightKey=FALSE;
+		BlokeList[i].Direction=NONE;
+		BlokeList[i].LastDirection=NONE;
+		BlokeList[i].LeftCount=0;
+		BlokeList[i].RightCount=0;
+		BlokeList[i].UpCount=0;
+		BlokeList[i].DownCount=0;
+		BlokeList[i].NumBombs=1;
+		BlokeList[i].Boot=FALSE;
+		BlokeList[i].BombStrength=2;
+		BlokeList[i].Life=STARTLIFE;
+		BlokeList[i].Speed=FALSE;
+	}
+	for (i=0; i<MAXBOMBS; i++) {
+	  BombQueue[i].Timer=0;
+	  ExplosionQueue[i].Timer=0;
+	}
+	for (i=0; i<MAXCRATES; i++) {
+	  PowerUpList[i].Id=-1;
+	}
+	SetupStaticBlokes();
+	WinGBitBlt(MemDc, 0, 0, 639, 416, MapDc, 0, 0);
+	DrawScores();
+	Update(0, 0, 639, 416);
+	IsVictory=FALSE;
+	GameStage=2;
+	FirstTime=time(NULL);
+	ResetRequest=FALSE;
+   IsMegaRiot=FALSE;
+}
+
+void
+TBombBlokeWin::GameLoop()
+{
+  MSG msg;
+  Terminate=FALSE;
+  int TimeTaken;
+  int Start;
+  int FrameTime=(int)(1000.0/MAX_FRAMES_PS);
+  int Ouch=0;
+  while (!Terminate) {
+		ResetGame();
+		Slowed=0;
+		while (!ResetRequest && !Terminate) {
+			Start=GetTickCount();
+			GameCycle();
+			if (Ouch>0)
+			  Ouch--;
+			if (WaveRequest && Sound && !Ouch) {
+			 switch (WaveRequest) {
+				 case 1 : sndPlaySound((char *)ExplodeWave, SND_ASYNC | SND_MEMORY);
+							 break;
+				 case 2 : sndPlaySound((char *)ExplodeWaveOuch, SND_ASYNC | SND_MEMORY);
+							 Ouch=3;
+							 break;
+			 }
+			 WaveRequest=0;
+			}
+			if (PeekMessage(&msg, NULL, NULL, NULL, PM_REMOVE)){
+				TranslateMessage(&msg);
+				if (msg.message==WM_COMMAND && LOWORD(msg.wParam)==CM_START) {
+				  Terminate=TRUE;
+				}
+				DispatchMessage(&msg);
+			}
+			TimeTaken=GetTickCount()-Start;
+			if (TimeTaken>FrameTime)
+			  Slowed++;
+			while (TimeTaken<FrameTime && !Fast)
+			  TimeTaken=GetTickCount()-Start;
+		}
+/*		char s1[200];
+		char s2[200];
+		sprintf(s2, "DibXY - Calls %i, Time %i, Time/Calls %.2f\n", Calls[0], Timer[0], (float)Timer[0]/Calls[0]);
+		strcpy(s1, s2);
+		sprintf(s2, "Cycle - Calls %i, Time %i, Time/Calls %.2f\n", Calls[1], Timer[1], (float)Timer[1]/Calls[1]);
+		strcat(s1, s2);
+		sprintf(s2, "Draw  - Calls %i, Time %i, Time/Calls %.2f\n", Calls[2], Timer[2], (float)Timer[2]/Calls[2]);
+		strcat(s1, s2);
+		::MessageBox(HWindow, s1, "Stats", MB_OK); */
+  }
+  if (CloseRequest)
+	 CloseWindow();
+}
+
+void
+TBombBlokeWin::SetupWindow() {
+  TWindow::SetupWindow();
+  BlokeR[0]=new TDib(h, BLOKER1);
+  BlokeR[1]=new TDib(h, BLOKER2);
+  BlokeL[0]=new TDib(h, BLOKEL1);
+  BlokeL[1]=new TDib(h, BLOKEL2);
+  BlokeU[0]=new TDib(h, BLOKEU1);
+  BlokeU[1]=new TDib(h, BLOKEU2);
+  BlokeD[0]=new TDib(h, BLOKED1);
+  BlokeD[1]=new TDib(h, BLOKED2);
+  Floor=new TDib(h, FLOOR1);
+  ExplodeUp[0]=new TDib(h, EXPLUP);
+  ExplodeDown[0]=new TDib(h, EXPLDOWN);
+  ExplodeRight[0]=new TDib(h, EXPLRIGHT);
+  ExplodeLeft[0]=new TDib(h, EXPLLEFT);
+  ExplodeHoriz[0]=new TDib(h, EXPLHORIZ);
+  ExplodeVert[0]=new TDib(h, EXPLVERT);
+  ExplodeCentre[0]=new TDib(h, EXPLCENT);
+  ExplodeTLeft[0]=new TDib(h, EXPLTLEFT);
+  ExplodeTRight[0]=new TDib(h, EXPLTRIGHT);
+  ExplodeTUp[0]=new TDib(h, EXPLTUP);
+  ExplodeTDown[0]=new TDib(h, EXPLTDOWN);
+  ExplodeCUpLeft[0]=new TDib(h, EXPLCUPLEFT);
+  ExplodeCUpRight[0]=new TDib(h, EXPLCUPRIGHT);
+  ExplodeCDownLeft[0]=new TDib(h, EXPLCDOWNLEFT);
+  ExplodeCDownRight[0]=new TDib(h, EXPLCDOWNRIGHT);
+  ExplodeUp[1]=new TDib(h, EXPLUP2);
+  ExplodeDown[1]=new TDib(h, EXPLDOWN2);
+  ExplodeRight[1]=new TDib(h, EXPLRIGHT2);
+  ExplodeLeft[1]=new TDib(h, EXPLLEFT2);
+  ExplodeHoriz[1]=new TDib(h, EXPLHORI2);
+  ExplodeVert[1]=new TDib(h, EXPLVERT2);
+  ExplodeCentre[1]=new TDib(h, EXPLCENT2);
+  ExplodeTLeft[1]=new TDib(h, EXPLTLEFT2);
+  ExplodeTRight[1]=new TDib(h, EXPLTRIGHT2);
+  ExplodeTUp[1]=new TDib(h, EXPLTUP2);
+  ExplodeTDown[1]=new TDib(h, EXPLTDOWN2);
+  ExplodeCUpLeft[1]=new TDib(h, EXPLCUPLEFT2);
+  ExplodeCUpRight[1]=new TDib(h, EXPLCUPRIGHT2);
+  ExplodeCDownLeft[1]=new TDib(h, EXPLCDOWNLEFT2);
+  ExplodeCDownRight[1]=new TDib(h, EXPLCDOWNRIGHT2);
+  Crate[0]=new TDib(h, CRATE1);
+  Crate[1]=new TDib(h, CRATE2);
+  Crate[2]=new TDib(h, CRATE3);
+  Number[0]=new TDib(h, ZEROS);
+  Number[1]=new TDib(h, ONES);
+  Number[2]=new TDib(h, TWOS);
+  Number[3]=new TDib(h, THREES);
+  Number[4]=new TDib(h, FOURS);
+  Number[5]=new TDib(h, FIVES);
+  Number[6]=new TDib(h, SIXES);
+  Number[7]=new TDib(h, SEVENS);
+  Number[8]=new TDib(h, EIGHTS);
+  Number[9]=new TDib(h, NINES);
+  Def[0]=new TDib(h, DEF1);
+  Def[1]=new TDib(h, DEF2);
+  Def[2]=new TDib(h, DEF3);
+  Def[3]=new TDib(h, DEF4);
+  Def[4]=new TDib(h, DEF5);
+  Def[5]=new TDib(h, DEF6);
+  Def[6]=new TDib(h, DEAD);
+  Bomb[0]=new TDib(h, BOMB1);
+  Bomb[1]=new TDib(h, BOMB2);
+  Bomb[2]=new TDib(h, BOMB3);
+  Bomb[3]=new TDib(h, BOMB2);
+  PowerUp[0]=new TDib(h, BOMBUP);
+  PowerUp[1]=new TDib(h, FLAMEUP);
+  PowerUp[2]=new TDib(h, BOOTUP);
+  PowerUp[3]=new TDib(h, SPEEDUP);
+  NumberDib[0]=new TDib(h, ZEROS);	  NumberDib[1]=new TDib(h, ONES);
+  NumberDib[2]=new TDib(h, TWOS); 	  NumberDib[3]=new TDib(h, THREES);
+  NumberDib[4]=new TDib(h, FOURS);	  NumberDib[5]=new TDib(h, FIVES);
+  NumberDib[6]=new TDib(h, SIXES); 	  NumberDib[7]=new TDib(h, SEVENS);
+  NumberDib[8]=new TDib(h, EIGHTS);   NumberDib[9]=new TDib(h, NINES);
+  PressAKey=NULL;
+
+  for (int i=0; i<MAXBLOKES; i++) {
+	  LastBloke[i]=new TDib(h, BLOKER1);
+	  BlokeList[i].Control=COMPUTER;
+  }
+  Panel=new TDib(h, RIOT);
+  BombBlokePalette=new TPalette(*Panel);
+
+  MemDc=CreateWinGDC(Panel->GetColors(), &ScreenBits);
+  MapDc=CreateWinGDC(Panel->GetColors(), &MapBits);
+  delete Panel;
+  tagRECT r;
+  r.top=0; r.left=0; r.right=639; r.bottom=479;
+  ::FillRect(MapDc, &r, (HBRUSH)TBrush(TColor(123, 132, 100)));
+  ::FillRect(MemDc, &r, (HBRUSH)TBrush(TColor(123, 132, 100)));
+
+  HGLOBAL sound;
+  HRSRC handle;
+  if ((handle=::FindResource(h, "EXPLOSION", RT_RCDATA))!=NULL)
+	 if ((sound=::LoadResource(h, handle))!=NULL)
+		ExplodeWave=::LockResource(sound);
+  if ((handle=::FindResource(h, "EXPLOSIONOUCH", RT_RCDATA))!=NULL)
+	 if ((sound=::LoadResource(h, handle))!=NULL)
+		ExplodeWaveOuch=::LockResource(sound);
+  if (!sndPlaySound((char *)ExplodeWave, SND_ASYNC | SND_MEMORY)) {
+	  ::MessageBox(HWindow, "Unable to play wave sounds!", "Bomb Riot", MB_OK);
+  }
+  sndPlaySound(NULL, 0);
+
+  TClientDC dc(*this);
+  int q;
+  q=GetDeviceCaps((HDC)dc, BITSPIXEL);
+  if (q<8) {
+	  char s[100];
+	  sprintf(s, "Bomb Riot requires Windows to be\nrunning in at least 8 bit (256 colour) mode\nCurrent colour mode: %i bit", q);
+	  ::MessageBox(HWindow, s, "Bomb Riot", MB_OK);
+	  sprintf(s, "See the Windows help file for information\non changing the colour mode.");
+	  ::MessageBox(HWindow, s, "Bomb Riot", MB_OK);
+	  CloseWindow();
+  }
+  if (ScreenX>640 || ScreenY>480) {
+	  char s[100];
+	  sprintf(s, "If Bomb Riot runs slowly, try lowering the screen resolution\nCurrent Screen Resolution %ix%i", ScreenX, ScreenY);
+	  ::MessageBox(HWindow, s, "Bomb Riot", MB_OK);
+  }
+
+//  SetTimer(1, 30);
+}
+
+void
+TBombBlokeWin::NextMidi(int n)
+{
+  if (!Music)
+	 return;
+  id=-1;
+  mciOpen.wDeviceID=NULL;
+  mciOpen.lpstrDeviceType="sequencer";
+
+  mciSendCommand(id, MCI_CLOSE, 0, NULL);
+  if (n==-1)
+	 return;
+
+  switch (n) {
+	  case OPTIONSTUNE : mciOpen.lpstrElementName="BOMRIOT0.MID";
+				  break;
+	  case GAMETUNE : mciOpen.lpstrElementName="BOMRIOT1.MID";
+				  break;
+	  case MEGATUNE : mciOpen.lpstrElementName="BOMRIOT2.MID";
+				  break;
+	  case VICTORYTUNE : mciOpen.lpstrElementName="BOMRIOT3.MID";
+				  break;
+	  case DRAWTUNE : mciOpen.lpstrElementName="BOMRIOT4.MID";
+				  break;
+  }
+  if ((rtrn=mciSendCommand(NULL,MCI_OPEN,MCI_OPEN_TYPE |
+	 MCI_OPEN_ELEMENT, (DWORD)(LPVOID)&mciOpen))!=0L) {
+  }
+  id=mciOpen.wDeviceID;
+  mciPlay.dwCallback=(unsigned long)HWindow;
+  if ((rtrn=mciSendCommand(id,MCI_PLAY, MCI_NOTIFY, (DWORD)&mciPlay))!=0L) {
+		mciSendCommand(id, MCI_CLOSE,0,NULL);
+//		mciGetErrorString(rtrn(LPSTR)b,128);
+//		DoMessage(HWindow, b);
+  }
+}
+
+TBombBlokeWin::~TBombBlokeWin()
+{
+  delete BlokeR[0];
+  delete BlokeR[1];
+  delete BlokeL[0];
+  delete BlokeL[1];
+  delete BlokeU[0];
+  delete BlokeU[1];
+  delete BlokeD[0];
+  delete BlokeD[1];
+  delete PowerUp[0];
+  delete PowerUp[1];
+  delete PowerUp[2];
+  delete PowerUp[3];
+  delete Bomb[0];
+  delete Bomb[1];
+  delete Bomb[2];
+  delete Bomb[3];
+  delete Floor;
+  delete ExplodeUp[0];
+  delete ExplodeDown[0];
+  delete ExplodeLeft[0];
+  delete ExplodeRight[0];
+  delete ExplodeHoriz[0];
+  delete ExplodeVert[0];
+  delete ExplodeCentre[0];
+  delete ExplodeTLeft[0];
+  delete ExplodeTRight[0];
+  delete ExplodeTUp[0];
+  delete ExplodeTDown[0];
+  delete ExplodeCUpLeft[0];
+  delete ExplodeCDownLeft[0];
+  delete ExplodeCUpRight[0];
+  delete ExplodeCDownRight[0];
+  delete ExplodeUp[1];
+  delete ExplodeDown[1];
+  delete ExplodeLeft[1];
+  delete ExplodeRight[1];
+  delete ExplodeHoriz[1];
+  delete ExplodeVert[1];
+  delete ExplodeCentre[1];
+  delete ExplodeTLeft[1];
+  delete ExplodeTRight[1];
+  delete ExplodeTUp[1];
+  delete ExplodeTDown[1];
+  delete ExplodeCUpLeft[1];
+  delete ExplodeCDownLeft[1];
+  delete ExplodeCUpRight[1];
+  delete ExplodeCDownRight[1];
+  delete Def[0];
+  delete Def[1];
+  delete Def[2];
+  delete Def[3];
+  delete Def[4];
+  delete Def[5];
+  delete Def[6];
+  delete Crate[0];
+  delete Crate[1];
+  delete Crate[2];
+  delete Number[0];
+  delete Number[1];
+  delete Number[2];
+  delete Number[3];
+  delete Number[4];
+  delete Number[5];
+  delete Number[6];
+  delete Number[7];
+  delete Number[8];
+  delete Number[9];
+  delete PressAKey;
+}
+
+int
+TBombBlokeWin::InRect(TPoint& point, int l, int t, int r, int b)
+{
+  if (point.x>=l && point.x<=r && point.y>=t && point.y<=b) return TRUE;
+	 else return FALSE;
+}
+
+void
+TBombBlokeWin::UpdateOptionsScreen()
+{
+/*		int i;
+		OpenScreen=new TDib(h, OPENSCREEN);
+		DibXY(ScreenBits, 80, 16, OpenScreen);
+		delete OpenScreen;
+
+		tagRECT r;
+//		::SelectObject(MemDc, (HBRUSH)TBrush(TColor(150, 150, 150)));
+		for (i=0; i<4; i++) {
+		  r.top=56+(48*i);
+		  r.bottom=89+(48*i);
+		  if (BlokeList[i].Computer) {
+			  r.left=164; r.right=213;
+		  }
+		  else {
+			  r.left=231; r.right=280;
+		  }
+		  ::FrameRect(MemDc, &r, (HBRUSH)TBrush(TColor(255, 255, 0)));
+		}
+		r.left=288+(GamesToWin-1)*25; r.top=253; r.right=288+(GamesToWin-1)*25+24; r.bottom=281;
+		::FrameRect(MemDc, &r, (HBRUSH)TBrush(TColor(255, 255, 0)));
+		Update(80, 16, 560, 400); */
+}
+
+void
+TBombBlokeWin::EvLButtonDown(uint, TPoint& /*point*/)
+{
+/*	if (GameStage==1) {
+		int i;
+		for (i=0; i<4; i++) {
+			if (InRect(point, 165, 56+(48*i), 211, 89+(48*i))) BlokeList[i].Computer=1;
+			if (InRect(point, 232, 56+(48*i), 278, 89+(48*i))) BlokeList[i].Computer=0;
+		}
+		for (i=0; i<9; i++) {
+			if (InRect(point, 288+(i*25), 253, 288+(i*25)+24, 281)) GamesToWin=i+1;
+		}
+
+		UpdateOptionsScreen();
+
+		if (InRect(point, 113, 22, 516, 45)) {
+		  ResetGame();
+		}
+	}*/
+}
+
+void
+TBombBlokeWin::EvRButtonDown(uint, TPoint& point)
+{
+		char s[100];
+		sprintf(s, "X=%i, Y=%i", point.x, point.y);
+		MessageBox(s, "Mouse Coordinates");
+}
+
+void
+TBombBlokeWin::Paint(TDC& dc, BOOL, TRect& rect)
+{
+	dc.SelectObject(*BombBlokePalette);
+	dc.RealizePalette();
+	WinGBitBlt((HDC)dc, rect.left, rect.top, rect.right-rect.left, rect.bottom-rect.top,
+		 MemDc, rect.left, rect.top);
+}
+
+void
+TBombBlokeWin::DibXY(void far* Bits, int StartX, int StartY, TDib* Dib,
+			int Detect, int ColourOffset, int Low, int High)
+{
+// General Purpose Sprite Drawing Routine
+// Draws the sprite represented by 'Dib' to the Bitmap starting with 'Bits'
+// to the bitmap location with top left 'StartX', 'StartY'
+// if Detect is 256 then the top left colour is transarent, else
+// if Detect is non-zero then the colour 'Detect' is transparent
+// ColourOffset is the number of colours add to any colour meeting the
+// criteria 'Low' <= Colour <= 'High'
+#ifdef NODISPLAY
+	if (!NumberDisplay)
+	  return;
+#endif
+	int x, y;
+	int DibBit;
+	char far* Screen=(char far*)Bits;
+	int width=Dib->Width();
+	int height=Dib->Height();
+	void HUGE* DibBits=Dib->GetBits();
+	int BackGround;
+	if (Detect==256)
+		BackGround=*((unsigned char *)DibBits+(0*(width)+0)); else
+		BackGround=(Detect==0) ? 1000 : Detect;
+	for (y=0; y<height; y++) {
+		for (x=0; x<width; x++) {
+		  DibBit=*((unsigned char *)DibBits+(y*width+x));
+		  if (DibBit!=BackGround) {
+			  if (ColourOffset!=0 && DibBit>=Low && DibBit<=High) {
+					Screen[Times640[StartY+height-y-1]+StartX+x]=DibBit+ColourOffset;
+			  } else {
+					Screen[Times640[StartY+height-y-1]+StartX+x]=DibBit;
+			  }
+		  }
+		}
+	}
+}
+
+void
+TBombBlokeWin::GrabSprite(void far* Bits, long StartX, long StartY, TDib* Dib)
+{
+	long x, y;
+	char far* Screen=(char far*)Bits;
+	long width=Dib->Width();
+	long height=Dib->Height();
+	void HUGE* DibBits=Dib->GetBits();
+	for (y=0; y<height; y++) {
+		for (x=0; x<width; x++) {
+		  long Offset=((StartY+height-y-1)*640)+StartX+x;
+		  *((unsigned char *)DibBits+(y*width+x))=Screen[Offset];
+		}
+	}
+}
+
+void
+TBombBlokeWin::SetupStaticBlokes()
+{
+	  for (int y=0; y<MAZESIZEY; y++)
+		  for (int x=0; x<MAZESIZEX; x++) {
+				if (Maze[x][y]=='f') DibXY(MapBits, x*BSIZE, y*BSIZE, Floor);
+				if (Maze[x][y]=='O') DibXY(MapBits, x*BSIZE, y*BSIZE, BlockOut);
+				if (Maze[x][y]=='I') DibXY(MapBits, x*BSIZE, y*BSIZE, BlockIn);
+				if (Maze[x][y]=='C') {
+					DibXY(MapBits, x*BSIZE, y*BSIZE, Floor);
+					DibXY(MapBits, x*BSIZE, y*BSIZE, Crate[0], 256);
+				}
+
+		  }
+	  Panel=new TDib(h, PANEL);
+	  DibXY(MapBits, 480, 0, Panel);
+	  delete Panel;
+	  delete BlockIn;
+     delete BlockOut;
+}
+
+void
+TBombBlokeWin::DrawNumber(void far* Bits, int CentreX, int y, int n)
+{
+	if (n<10) DibXY(Bits, CentreX-8, y, Number[n], 256);
+	else if (n<100) {
+		DibXY(Bits, CentreX-26, y, Number[n/10], 256);
+		DibXY(Bits, CentreX-26+20, y, Number[n%10], 256);
+	} else if (n<1000) {
+		DibXY(Bits, CentreX-34, y, Number[n/100], 256);
+		DibXY(Bits, CentreX-34+20, y, Number[n%100/10], 256);
+		DibXY(Bits, CentreX-34+40, y, Number[n%10], 256);
+	}
+}
+
+void
+TBombBlokeWin::DrawScores()
+{
+	int i;
+	for (i=0; i<MAXBLOKES; i++) {
+		DrawSmallNumber((char far*)ScreenBits, 600, 185+(i*31), (BlokeList[i].Points>99 ? 99 : BlokeList[i].Points));
+	}
+}
+
+void
+TBombBlokeWin::NewPowerUp(int MazeX, int MazeY)
+{
+	int i;
+	int Pos=-1;
+	for (i=0; i<MAXCRATES; i++) {
+	  if (PowerUpList[i].Id==-1) {
+		  Pos=i; // Potential Slot for new PowerUp
+	  }
+	}
+	if (Pos!=-1) {
+	  PowerUpList[Pos].Id=random(4);
+	  PowerUpList[Pos].MazeX=MazeX;
+	  PowerUpList[Pos].MazeY=MazeY;
+	  PowerUpList[Pos].PulseState=-64;
+	  PowerUpList[Pos].PulseDir=+1;
+	}
+}
+
+void
+TBombBlokeWin::Update(int l, int t, int w, int h)
+{
+	LPPOINT Trans=new POINT;
+	TClientDC Maindc(*this);
+	Maindc.SelectObject(*BombBlokePalette);
+	Maindc.RealizePalette();
+	GetDCOrgEx((HDC)Maindc, Trans);
+	int r=(l+Trans->x)%4;
+	if (l-r>4) {
+	  l-=r;
+	  w+=r;
+	}
+	WinGBitBlt((HDC)Maindc, l, t, w, h, MemDc, l, t);
+	delete Trans;
+}
+
+TRect UpdateBlock[200];
+TRect OldUpdateBlock[200];
+int BlocksStored;
+int OldBlocksStored=0;
+
+void
+TBombBlokeWin::Store(int x, int y, int x2, int y2, int Position=-1)
+{
+  if (Position==-1) {
+	 Position=BlocksStored;
+	 BlocksStored++;
+  }
+  UpdateBlock[Position].left=x;
+  UpdateBlock[Position].top=y;
+  UpdateBlock[Position].right=x2+x;
+  UpdateBlock[Position].bottom=y2+y;
+}
+
+void
+TBombBlokeWin::StoredUpdate()
+{
+	int i;
+
+	for (i=0; i<4; i++) {
+	  Update(OldUpdateBlock[i].left, OldUpdateBlock[i].top,
+		 OldUpdateBlock[i].right-OldUpdateBlock[i].left,
+		 OldUpdateBlock[i].bottom-OldUpdateBlock[i].top);
+	  Update(UpdateBlock[i].left, UpdateBlock[i].top,
+		 UpdateBlock[i].right-UpdateBlock[i].left,
+		 UpdateBlock[i].bottom-UpdateBlock[i].top);
+	  OldUpdateBlock[i]=UpdateBlock[i];
+	}
+
+	for (i=4; i<OldBlocksStored; i++) {
+	  Update(OldUpdateBlock[i].left, OldUpdateBlock[i].top,
+		 OldUpdateBlock[i].right-OldUpdateBlock[i].left,
+		 OldUpdateBlock[i].bottom-OldUpdateBlock[i].top);
+	}
+
+	for (i=4; i<BlocksStored; i++) {
+	  Update(UpdateBlock[i].left, UpdateBlock[i].top,
+		 UpdateBlock[i].right-UpdateBlock[i].left,
+		 UpdateBlock[i].bottom-UpdateBlock[i].top);
+	  OldUpdateBlock[i]=UpdateBlock[i];
+	}
+	OldBlocksStored=BlocksStored;
+}
+
+void
+TBombBlokeWin::DrawScreen()
+{
+   BlocksStored=4;
+	timercount++;
+	WinGBitBlt(MemDc, 32, 12, 417, 373, MapDc, 32, 12);
+	if (time(NULL)-oldtime2>=1) {
+		if (time(NULL)-oldtime>=4) {
+		  SpeedPercent=((Slowed>2) || Fast ? (int)(((float)timercount/4.0/(float)MAX_FRAMES_PS)*100.0) : 100);
+		  Slowed=0;
+		  if (SpeedPercent>100 && !Fast)
+			 SpeedPercent=100;
+		  timercount=0;
+		  oldtime=time(NULL);
+		}
+		WinGBitBlt(MemDc, 520, 316, 100, 58, MapDc, 520, 316);
+		TimeLeft=(TimeOut)-(time(NULL)-FirstTime);
+		DrawSmallNumber((char far*)ScreenBits, 570, 343, (TimeLeft>0) ? TimeLeft : 0);
+		DrawSmallNumber((char far*)ScreenBits, 570, 316, SpeedPercent);
+		Update(520, 316, 90, 59);
+		oldtime2=time(NULL);
+	}
+
+	static int x, y;
+	static Pulse=0;
+
+
+	int xa, ya, i, j, t;
+	// order with lowest y values first store indexes in array 'Order'
+	// so a[0] holds the number of the first bloke to be drawn
+	int Order[MAXBLOKES];
+
+/*********************************************************************/
+/*                         Order Blokes on YPos                      */
+/*********************************************************************/
+	for (i=0; i<NUMBLOKES; i++) Order[i]=i;
+	for (i=0; i<NUMBLOKES-1; i++) {
+	  for (j=i+1; j<NUMBLOKES; j++) {
+		if (BlokeList[Order[j]].YPos<BlokeList[Order[i]].YPos) {
+			t=Order[i];
+			Order[i]=Order[j];
+			Order[j]=t;
+		}
+	  }
+	}
+
+/*********************************************************************/
+/*                          Draw Power Ups                           */
+/*********************************************************************/
+	for (i=0; i<MAXCRATES; i++) {
+	  if (PowerUpList[i].Id!=-1) {
+			if (Exploded[PowerUpList[i].MazeX][PowerUpList[i].MazeY]) {
+				PowerUpList[i].Id=-1;
+			} else {
+			  DibXY(ScreenBits, PowerUpList[i].MazeX*BSIZE, PowerUpList[i].MazeY*BSIZE, PowerUp[PowerUpList[i].Id], 254, PowerUpList[i].PulseState, 96, 96);
+			  Store(PowerUpList[i].MazeX*BSIZE, PowerUpList[i].MazeY*BSIZE, BSIZE, BSIZE);
+			  if (PowerUpList[i].PulseState==-57) PowerUpList[i].PulseDir=-1;
+			  if (PowerUpList[i].PulseState==-64) PowerUpList[i].PulseDir=+1;
+			  PowerUpList[i].PulseState+=PowerUpList[i].PulseDir;
+			}
+	  }
+	}
+
+/*********************************************************************/
+/*                         Draw Dead Blokes                          */
+/*********************************************************************/
+	for (j=0; j<NUMBLOKES; j++) {
+	  i=Order[j];
+	  x=BlokeList[i].XPos/PART;
+	  y=BlokeList[i].YPos/PART;
+	  xa=(BlokeList[i].XPos%PART)*(float)(BSIZE/PART);
+	  ya=(BlokeList[i].YPos%PART)*(float)(BSIZE/PART);
+	  if (BlokeList[i].Life<STARTLIFE) {
+			int DefStage=BlokeList[i].Life;
+			if (DefStage==0) DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, Def[6], 256);
+			if (DefStage==1 || DefStage==2) DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, Def[5], 256);
+			if (DefStage==3 || DefStage==4) DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, Def[4], 256);
+			if (DefStage==5 || DefStage==6) DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, Def[3], 256, i*8, 32, 39);
+			if (DefStage==7 || DefStage==8) DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, Def[2], 256, i*8, 32, 39);
+			if (DefStage==9 || DefStage==10) DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, Def[1], 256, i*8, 32, 39);
+			if (DefStage==11 || DefStage==12) DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, Def[0], 256, i*8, 32, 39);
+			Store(x*BSIZE+xa, y*BSIZE+ya-21, BSIZE, BSIZE+21, i);
+	  }
+	}
+
+/*********************************************************************/
+/*                            Draw Bombs                             */
+/*********************************************************************/
+	for (i=0; i<MAXBOMBS; i++) {
+		if (BombQueue[i].Timer>0) {
+		  x=BombQueue[i].MazeX;
+		  y=BombQueue[i].MazeY;
+		  DibXY(ScreenBits, x*BSIZE, y*BSIZE, Bomb[BombQueue[i].PulseState], 256, BombQueue[i].Owner*8, 32, 39);
+		  Store(x*BSIZE, y*BSIZE, BSIZE, BSIZE);
+		}
+	}
+
+/*********************************************************************/
+/*                            Draw Crates                            */
+/*********************************************************************/
+	for (i=0; i<=LastCrate; i++) {
+	  if (CrateList[i].Timer<CRATESTART && CrateList[i].Timer>0) {
+		  CrateList[i].Timer--;
+		  if (CrateList[i].Timer>CRATESTART/2) {
+			  DibXY(ScreenBits, CrateList[i].MazeX*BSIZE, CrateList[i].MazeY*BSIZE, Floor);
+			  DibXY(ScreenBits, CrateList[i].MazeX*BSIZE, CrateList[i].MazeY*BSIZE, Crate[1], 256);
+		  } else
+		  if (CrateList[i].Timer>=0) {
+			  DibXY(ScreenBits, CrateList[i].MazeX*BSIZE, CrateList[i].MazeY*BSIZE, Floor);
+			  DibXY(ScreenBits, CrateList[i].MazeX*BSIZE, CrateList[i].MazeY*BSIZE, Crate[2], 256);
+		  }
+		  if (CrateList[i].Timer==0) {
+			  DibXY(MapBits, CrateList[i].MazeX*BSIZE, CrateList[i].MazeY*BSIZE, Floor);
+			  Maze[CrateList[i].MazeX][CrateList[i].MazeY]='f';
+			  if (random(3)>0) NewPowerUp(CrateList[i].MazeX, CrateList[i].MazeY);
+		  }
+		  Store(CrateList[i].MazeX*BSIZE, CrateList[i].MazeY*BSIZE, BSIZE, BSIZE);
+	  }
+	}
+
+/*********************************************************************/
+/*                           Draw Explosions                         */
+/*********************************************************************/
+/* For drawing the explosions, an array of the size of the maze is   */
+/* filled in with the squares occupied by explosions so that cross   */
+/* overs can be detected and suitably displayed.                     */
+/*********************************************************************/
+	Pulse=!Pulse;
+	for (x=0; x<MAZESIZEX; x++) {
+		for (y=0; y<MAZESIZEY; y++) {
+		  if (Exploded[x][y]) {
+			 if (Exploded[x+1][y] && Exploded[x-1][y] && Exploded[x][y+1] && Exploded[x][y-1])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeCentre[Pulse], 256); else
+			 if (Exploded[x+1][y] && Exploded[x-1][y] && Exploded[x][y+1])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeTDown[Pulse], 256); else
+			 if (Exploded[x+1][y] && Exploded[x-1][y] && Exploded[x][y-1])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeTUp[Pulse], 256); else
+			 if (Exploded[x+1][y] && Exploded[x][y+1] && Exploded[x][y-1])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeTRight[Pulse], 256); else
+			 if (Exploded[x-1][y] && Exploded[x][y+1] && Exploded[x][y-1])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeTLeft[Pulse], 256); else
+			 if (Exploded[x-1][y] && Exploded[x+1][y])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeHoriz[Pulse], 256); else
+			 if (Exploded[x][y-1] && Exploded[x][y+1])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeVert[Pulse], 256); else
+			 if (Exploded[x][y-1] && Exploded[x-1][y])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeCDownLeft[Pulse], 256); else
+			 if (Exploded[x][y-1] && Exploded[x+1][y])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeCDownRight[Pulse], 256); else
+			 if (Exploded[x][y+1] && Exploded[x-1][y])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeCUpLeft[Pulse], 256); else
+			 if (Exploded[x][y+1] && Exploded[x+1][y])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeCUpRight[Pulse], 256); else
+			 if (Exploded[x][y-1])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeDown[Pulse], 256); else
+			 if (Exploded[x][y+1])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeUp[Pulse], 256); else
+			 if (Exploded[x+1][y])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeLeft[Pulse], 256); else
+			 if (Exploded[x-1][y])
+				DibXY(ScreenBits, x*BSIZE, y*BSIZE, ExplodeRight[Pulse], 256);
+			 Store(x*BSIZE, y*BSIZE, BSIZE, BSIZE);
+		  }
+		}
+	}
+
+/*********************************************************************/
+/*                           Draw Blokes                             */
+/*********************************************************************/
+	for (j=0; j<NUMBLOKES; j++) {
+		i=Order[j];
+		x=BlokeList[i].XPos/PART;
+		y=BlokeList[i].YPos/PART;
+		xa=(BlokeList[i].XPos%PART)*(float)(BSIZE/PART);
+		ya=(BlokeList[i].YPos%PART)*(float)(BSIZE/PART);
+		if (BlokeList[i].Life==STARTLIFE) {
+		  switch (BlokeList[i].Direction) {
+			case NONE  : DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, LastBloke[i], 256, i*8, 32, 39);
+							 break;
+			case LEFT  : BlokeList[i].LeftCount=!BlokeList[i].LeftCount;
+							 DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, (LastBloke[i]=BlokeL[BlokeList[i].LeftCount]), 256, i*8, 32, 39);
+							 break;
+			case RIGHT : BlokeList[i].RightCount=!BlokeList[i].RightCount;
+							 DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, (LastBloke[i]=BlokeR[BlokeList[i].RightCount]), 256, i*8, 32, 39);
+							 break;
+			case UP    : BlokeList[i].UpCount=!BlokeList[i].UpCount;
+							 DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, (LastBloke[i]=BlokeU[BlokeList[i].UpCount]), 256, i*8, 32, 39);
+							 break;
+			case DOWN  : BlokeList[i].DownCount=!BlokeList[i].DownCount;
+							 DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, (LastBloke[i]=BlokeD[BlokeList[i].DownCount]), 256, i*8, 32, 39);
+							 break;
+		 }
+		 Store(x*BSIZE+xa, y*BSIZE+ya-21, BSIZE, BSIZE+21, i);
+		}
+		if (BlokeList[i].Life==STARTLIFE+1) {
+			 Victory=new TDib(h, VICTORY);
+			 DibXY(ScreenBits, x*BSIZE+xa, y*BSIZE+ya-21, Victory, 256, i*8, 32, 39);
+			 delete Victory;
+			 Store(x*BSIZE+xa, y*BSIZE+ya-21, BSIZE, BSIZE+21, i);
+		}
+	}
+#ifndef NODISPLAY
+	StoredUpdate();
+#endif
+//	Update(31, 12, 424, 372);
+// NEW HERE
+}
+
+void
+TBombBlokeWin::MessageNumber(int n)
+{
+	char s[100];
+	sprintf(s, "%i", n);
+   MessageBox(s);
+}
+
+void
+TBombBlokeWin::SmashCrate(int MazeX, int MazeY)
+{
+	int i;
+	for (i=0; i<MAXCRATES; i++) {
+	  if (CrateList[i].Timer>0 && CrateList[i].MazeX==MazeX && CrateList[i].MazeY==MazeY)
+		 CrateList[i].Timer=CRATESTART-1;
+		 Maze[MazeX][MazeY]='f';
+	}
+}
+
+void
+TBombBlokeWin::Detonate(int MazeX, int MazeY)
+{
+  int i;
+  for (i=0; i<MAXBOMBS; i++) {
+	 if (BombQueue[i].Timer>0 && BombQueue[i].MazeX==MazeX && BombQueue[i].MazeY==MazeY) {
+		 BombQueue[i].Timer=1;
+	 }
+  }
+}
+
+void
+TBombBlokeWin::Explode(BombStruct Bomb)
+{
+	int i;
+	int Pos=MAXBOMBS;
+	int MazeX=Bomb.MazeX;
+	int MazeY=Bomb.MazeY;
+	int Strength=Bomb.Strength;
+	/* Find Free Position in ExplosionQueue[] */
+	for (i=0; i<MAXBOMBS; i++) {
+	  if (ExplosionQueue[i].Timer==0) {
+		  Pos=i;
+	  }
+	}
+	/* Add Explosion to ExplosionQueue[] */
+	if (Pos<MAXBOMBS) {
+		WaveRequest=1;
+		Maze[MazeX][MazeY]='f';
+		BlokeList[Bomb.Owner].NumBombs++;
+		ExplosionQueue[Pos].CentreX=ExplosionQueue[Pos].Left=ExplosionQueue[Pos].Right=Bomb.MazeX;
+		ExplosionQueue[Pos].CentreY=ExplosionQueue[Pos].Up=ExplosionQueue[Pos].Down=Bomb.MazeY;
+		ExplosionQueue[Pos].Timer=EXPLOSIONSTART;
+		ExplosionQueue[Pos].Owner=Bomb.Owner;
+		/* Explode Left */
+		for (i=MazeX-1; i>=MazeX-Strength && Maze[i][MazeY]=='f'; i--) {
+				 ExplosionQueue[Pos].Left=i;
+		}
+		// if explosion was blocked then if it was a bomb then detonate
+		// if it was a crate then blah blah...
+		if (i>=MazeX-Strength && (Maze[i][MazeY]=='B' || Maze[i][MazeY]=='b')) Detonate(i, MazeY);
+		if (i>=MazeX-Strength && Maze[i][MazeY]=='C') SmashCrate(i, MazeY);
+		/* Explode Right */
+		for (i=MazeX+1; i<=MazeX+Strength && Maze[i][MazeY]=='f'; i++) {
+				 ExplosionQueue[Pos].Right=i;
+		}
+		if (i<=MazeX+Strength && (Maze[i][MazeY]=='B' || Maze[i][MazeY]=='b')) Detonate(i, MazeY);
+		if (i<=MazeX+Strength && Maze[i][MazeY]=='C') SmashCrate(i, MazeY);
+		/* Explode Up */
+		for (i=MazeY-1; i>=MazeY-Strength && Maze[MazeX][i]=='f'; i--) {
+				 ExplosionQueue[Pos].Up=i;
+		}
+		if (i>=MazeY-Strength && (Maze[MazeX][i]=='B' || Maze[MazeX][i]=='b')) Detonate(MazeX, i);
+		if (i>=MazeY-Strength && Maze[MazeX][i]=='C') SmashCrate(MazeX, i);
+		/* Explode Down */
+		for (i=MazeY+1; i<=MazeY+Strength && Maze[MazeX][i]=='f'; i++) {
+				 ExplosionQueue[Pos].Down=i;
+		}
+		if (i<=MazeY+Strength && (Maze[MazeX][i]=='B' || Maze[MazeX][i]=='b')) Detonate(MazeX, i);
+		if (i<=MazeY+Strength && Maze[MazeX][i]=='C') SmashCrate(MazeX, i);
+	}
+}
+
+void
+TBombBlokeWin::DrawSmallNumber(char far* Screen, int x, int y, int Number)
+{
+	NumberDisplay=TRUE;
+	char s[100];
+	wsprintf(s, "%li", (long)Number);
+	int i;
+	int l=strlen(s);
+	int Width=NumberDib[0]->Width()+3;
+	for (i=0; i<l; i++) {
+		DibXY(Screen, x, y, NumberDib[s[i]-48], 256, 0, 224, 238);
+		x+=Width;
+	}
+	NumberDisplay=FALSE;
+}
+
+int
+TBombBlokeWin::CanEscape(int X, int Y, int Distance, int Direction, int Maze[MAZESIZEX][MAZESIZEY])
+{
+/* Returns TRUE if a square can be reached that is not on these lines
+	X-Distance, Y - X+Distance, Y
+	X, Y-Distance - X, Y+Distance
+	Otherwise, returns FALSE */
+/* This is done be seeing if any of 'B', 'b', 'C', 'I', or 'O' appear on the
+	line before an opening to escape */
+
+	int x, y, c, Blocked;
+
+// Check Left
+	if (Direction==LEFT)
+	for (x=X-1, Blocked=FALSE; !Blocked; x--) {
+		c=Maze[x][Y];
+		if (c!='f') Blocked=TRUE; else
+		if (Maze[x][Y-1]=='f' || Maze[x][Y+1]=='f' || x<X-Distance) {
+			return TRUE;
+		}
+	}
+// Check Right
+	if (Direction==RIGHT)
+	for (x=X+1, Blocked=FALSE; !Blocked; x++) {
+		c=Maze[x][Y];
+		if (c!='f') Blocked=TRUE; else
+		if (Maze[x][Y-1]=='f' || Maze[x][Y+1]=='f' || x>X+Distance) {
+			return TRUE;
+		}
+	}
+// Check Up
+	if (Direction==UP)
+	for (y=Y-1, Blocked=FALSE; !Blocked; y--) {
+		c=Maze[X][y];
+		if (c!='f') Blocked=TRUE; else
+		if (Maze[X-1][y]=='f' || Maze[X+1][y]=='f' || y<Y-Distance) {
+			return TRUE;
+		}
+	}
+// Check Down
+	if (Direction==DOWN)
+	for (y=Y+1, Blocked=FALSE; !Blocked; y++) {
+		c=Maze[X][y];
+		if (c!='f') Blocked=TRUE; else
+		if (Maze[X-1][y]=='f' || Maze[X+1][y]=='f' || y>Y+Distance) {
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+//BOOL
+//TBombBlokeWin::Trapped(int Bloke, int Maze[MAZESIZEX][MAZESIZEY])
+//{
+//}
+
+void
+TBombBlokeWin::GameCycle()
+{
+	if (GameStage>=3) {
+		 PressBackGround=new TDib(h, WINNER1);
+		 GrabSprite(ScreenBits, FlagPos, 189, PressBackGround);
+		 if (++PressPulse1>4) {
+			 PressPulse2++;
+			 PressPulse1=0;
+		 }
+		 if (PressPulse2>3) PressPulse2=0;
+		 delete PressAKey;
+		 switch (PressPulse2) {
+			 case 0 : if (WinState==WIN) PressAKey=new TDib(h, WINNER1); else
+							 PressAKey=new TDib(h, DRAW1); break;
+			 case 1 : if (WinState==WIN) PressAKey=new TDib(h, WINNER2); else
+							 PressAKey=new TDib(h, DRAW2); break;
+			 case 2 : if (WinState==WIN) PressAKey=new TDib(h, WINNER3); else
+							 PressAKey=new TDib(h, DRAW3); break;
+			 case 3 : if (WinState==WIN) PressAKey=new TDib(h, WINNER2); else
+							 PressAKey=new TDib(h, DRAW2); break;
+		 }
+		 int Length=PressAKey->Width();
+		 DibXY(ScreenBits, FlagPos, 189, PressAKey, 256);
+		 Update(FlagPos-FLAGSPEED, 189, FlagPos+Length+2, 155);
+		 DibXY(ScreenBits, FlagPos, 189, PressBackGround);
+		 delete PressBackGround;
+		 if (FlagPos+FlagDir<2) FlagDir=+FLAGSPEED;
+		 if (FlagPos+FlagDir>479-Length) FlagDir=-FLAGSPEED;
+		 FlagPos+=FlagDir;
+       int AllComp=TRUE;
+		 for (int i=0; i<NUMBLOKES; i++)
+			 if (!BlokeList[i].Control==COMPUTER) AllComp=FALSE;
+		 if (GameStage==3 && FlagPos<(479/2)-(Length/2) && AllComp) {
+			 EvKeyDown(0, 0, 0);
+		 }
+		 return;
+	}
+
+	int i, j, x, y;
+
+	if (IsMegaRiot==0 && time(NULL)-FirstTime>=TimeOut) {
+		IsMegaRiot=1;
+	}
+	if (IsMegaRiot) {
+		IsMegaRiot++;
+		if (IsMegaRiot%MAX_FRAMES_PS==0)
+		  DropBomb(-1);
+	}
+/*********************************************************************/
+/*                     Alter Bomb Properties                         */
+/*********************************************************************/
+		for (i=0; i<MAXBOMBS; i++) {
+		  if (BombQueue[i].Timer>0) {
+			 if (Maze[BombQueue[i].MazeX][BombQueue[i].MazeY]=='b') {
+				 int Clear=TRUE;
+				 int BX=BombQueue[i].MazeX;
+				 int BY=BombQueue[i].MazeY;
+				 for (j=0; j<NUMBLOKES; j++) {
+					 int X=BlokeList[j].XPos;
+					 int Y=BlokeList[j].YPos;
+					 if ((X/PART==BX && Y/PART==BY) ||
+						  (X/PART+(X%PART!=0)==BX && Y/PART==BY) ||
+						  (X/PART==BX && Y/PART+(Y%PART!=0)==BY))
+							  Clear=FALSE;
+				 }
+				 if (Clear) Maze[BX][BY]='B';
+			 }
+			 BombQueue[i].Timer--;
+			 if (BombQueue[i].Timer==0 && !IsVictory) {
+				 Explode(BombQueue[i]);
+			 }
+			 if (BombQueue[i].Timer%PULSELENGTH==0) {
+				 BombQueue[i].PulseState++;
+				 if (BombQueue[i].PulseState>3)
+					 BombQueue[i].PulseState=0;
+			 }
+		  }
+		}
+/*********************************************************************/
+/*                     Alter Explosion Properties                    */
+/*********************************************************************/
+	  for (i=0; i<MAXBOMBS; i++) {
+		 if (ExplosionQueue[i].Timer>0) {
+			ExplosionQueue[i].Timer--;
+		 }
+	  }
+	  for (x=0; x<MAZESIZEX; x++)
+		for (y=0; y<MAZESIZEY; y++)
+			Exploded[x][y]=FALSE;
+	  for (i=0; i<MAXBOMBS; i++) {
+		if (ExplosionQueue[i].Timer>0) {
+			x=ExplosionQueue[i].CentreX;
+			y=ExplosionQueue[i].CentreY;
+			Exploded[x][y]=TRUE;
+			for (j=x-1; j>=ExplosionQueue[i].Left; j--) Exploded[j][y]=TRUE;
+			for (j=x+1; j<=ExplosionQueue[i].Right; j++) Exploded[j][y]=TRUE;
+			for (j=y-1; j>=ExplosionQueue[i].Up; j--) Exploded[x][j]=TRUE;
+			for (j=y+1; j<=ExplosionQueue[i].Down; j++) Exploded[x][j]=TRUE;
+		}
+	  }
+/*********************************************************************/
+/*                            Computer AI                            */
+/*********************************************************************/
+		int AvailDirs[4]; // Left==0, Right==1, Up==2, Down==3
+		int CurX, CurY; // Current X and Y
+		int AIMaze[MAZESIZEX][MAZESIZEY];
+		int Count[4];
+		int ChosenDirection;
+
+/****** Make Maze of potential Explosions ******/
+		int GoingToExplode[MAZESIZEX][MAZESIZEY];
+		for (x=0; x<MAZESIZEX; x++)
+			for (y=0; y<MAZESIZEY; y++)
+				GoingToExplode[x][y]=FALSE;
+		int Bomb;
+		ExplosionStruct Explosion;
+		int Strength;
+		for (Bomb=0; Bomb<MAXBOMBS; Bomb++) {
+		  if (BombQueue[Bomb].Timer>0) {
+			 x=BombQueue[Bomb].MazeX;
+			 y=BombQueue[Bomb].MazeY;
+			 Explosion.Left=Explosion.Right=x;
+			 Explosion.Up=Explosion.Down=y;
+			 Strength=BombQueue[Bomb].Strength;
+			 for (i=x-1; i>=x-Strength && Maze[i][y]=='f'; i--) Explosion.Left=i;
+			 for (i=x+1; i<=x+Strength && Maze[i][y]=='f'; i++) Explosion.Right=i;
+			 for (i=y-1; i>=y-Strength && Maze[x][i]=='f'; i--) Explosion.Up=i;
+			 for (i=y+1; i<=y+Strength && Maze[x][i]=='f'; i++) Explosion.Down=i;
+			 for (j=x-1; j>=Explosion.Left; j--) GoingToExplode[j][y]=TRUE;
+			 for (j=x+1; j<=Explosion.Right; j++) GoingToExplode[j][y]=TRUE;
+			 for (j=y-1; j>=Explosion.Up; j--) GoingToExplode[x][j]=TRUE;
+			 for (j=y+1; j<=Explosion.Down; j++) GoingToExplode[x][j]=TRUE;
+		  }
+		}
+		memcpy(AIMaze, Maze, MAZESIZEX*MAZESIZEY*sizeof(int));
+		for (x=0; x<MAZESIZEX; x++)
+			for (y=0; y<MAZESIZEY; y++) {
+				if (GoingToExplode[x][y])
+				  AIMaze[x][y]='x';
+				if (Exploded[x][y])
+				  AIMaze[x][y]='X';
+			}
+		int X[4];
+		int Y[4];
+      int Direction;
+		/*********************** AI Maze Created *************************/
+		for (i=0; i<NUMBLOKES; i++) {
+			// Store co-ordinates;
+			X[i]=BlokeList[i].XPos;
+			Y[i]=BlokeList[i].YPos;
+			if (BlokeList[i].Control==COMPUTER && BlokeList[i].Life==STARTLIFE) {
+				CurX=BlokeList[i].XPos;
+				CurY=BlokeList[i].YPos;
+				// if YPos is on a full square
+				// AND (XPos is not on a full square OR
+				//      XPos IS on a full square and the square to the left is empty)
+				int bs=SPEED*(BlokeList[i].Speed+1);
+				AvailDirs[0]=CanMove(LEFT, i, AIMaze);
+				AvailDirs[1]=CanMove(RIGHT, i, AIMaze);
+				AvailDirs[2]=CanMove(UP, i, AIMaze);
+				AvailDirs[3]=CanMove(DOWN, i, AIMaze);
+				for (j=0; j<4; j++)
+					Count[j]=0;
+				if (AvailDirs[0]) {
+					for (j=CurX/PART-1; AIMaze[j][CurY/PART]>='a'; j--) Count[0]++;
+					if (CurX%PART!=0) Count[0]++; // going left can go onto first bit of square
+				}
+				if (AvailDirs[1]) {
+					for (j=CurX/PART+1; AIMaze[j][CurY/PART]>='a'; j++) Count[1]++;
+				}
+				if (AvailDirs[2]) {
+					for (j=CurY/PART-1; AIMaze[CurX/PART][j]>='a'; j--) Count[2]++;
+					if (CurY%PART!=0) Count[2]++;
+				}
+				if (AvailDirs[3]) {
+					for (j=CurY/PART+1; AIMaze[CurX/PART][j]>='a'; j++) Count[3]++;
+				}
+				int NumAvail=(Count[0]>0)+(Count[1]>0)+(Count[2]>0)+(Count[3]>0);
+				int SeenBonus=FALSE; // if heading for bonus, overide clause that
+				// says that a bloke cannot change to opposite direction
+				if (NumAvail==0)
+					ChosenDirection=-1;
+				else {
+				  int Dirs[MAZESIZEX+MAZESIZEY+5];
+				  int NumPosSteps=Count[0]+Count[1]+Count[2]+Count[3];
+				  for (int j=0; j<Count[0]; j++) Dirs[j]=0;
+				  for (j=Count[0]; j<Count[0]+Count[1]; j++) Dirs[j]=1;
+				  for (j=Count[0]+Count[1]; j<Count[0]+Count[1]+Count[2]; j++) Dirs[j]=2;
+				  for (j=Count[0]+Count[1]+Count[2]; j<Count[0]+Count[1]+Count[2]+Count[3]; j++) Dirs[j]=3;
+				  ChosenDirection=Dirs[random(NumPosSteps)];
+				  // Maybe a bonus is in sight, if so, go for it
+				  if (CurX%PART==0 && CurY%PART==0) {
+					 for (int pl=0; pl<MAXCRATES; pl++) {
+						if (PowerUpList[pl].Id!=-1) {
+							int PDir=InSight(PowerUpList[pl].MazeX, PowerUpList[pl].MazeY, CurX/PART, CurY/PART, 5)-1;
+							if (PDir>=0 && Count[PDir]>0) {
+								ChosenDirection=PDir;
+								SeenBonus=TRUE;
+								//MessageNumber(PDir);
+							}
+						}
+					 }
+				  }
+				}
+				BlokeList[i].LeftKey=FALSE;
+				BlokeList[i].RightKey=FALSE;
+				BlokeList[i].UpKey=FALSE;
+				BlokeList[i].DownKey=FALSE;
+				if (AIMaze[CurX/PART][CurY/PART]!='X' && AIMaze[CurX/PART+(CurX%PART!=0)][CurY/PART]!='X' && AIMaze[CurX/PART][CurY/PART+(CurY%PART!=0)]!='X')
+				switch (ChosenDirection) {
+				// as long as bloke wasn't going in the opposite direction
+				// previously OR the current direction is blocked then choose
+				// this direction.
+					case 0 : if (SeenBonus || BlokeList[i].LastDirection!=RIGHT || Count[1]==0)
+										BlokeList[i].LeftKey=TRUE; else
+											if (Count[1]>0) BlokeList[i].RightKey=TRUE;
+											  break;
+					case 1 : if (SeenBonus || BlokeList[i].LastDirection!=LEFT || Count[0]==0)
+										BlokeList[i].RightKey=TRUE; else
+											if (Count[0]>0) BlokeList[i].LeftKey=TRUE;
+											  break;
+					case 2 : if (SeenBonus || BlokeList[i].LastDirection!=DOWN || Count[3]==0)
+										BlokeList[i].UpKey=TRUE; else
+											if (Count[3]>0) BlokeList[i].DownKey=TRUE;
+											  break;
+					case 3 : if (SeenBonus || BlokeList[i].LastDirection!=UP || Count[2]==0)
+										BlokeList[i].DownKey=TRUE; else
+											if (Count[2]>0) BlokeList[i].UpKey=TRUE;
+											  break;
+				}
+				// if on a potential explosion then get the fuck off
+				if ((AIMaze[CurX/PART][CurY/PART]=='x'
+				 || AIMaze[CurX/PART+(CurX%PART!=0)][CurY/PART]=='x'
+				 || AIMaze[CurX/PART][CurY/PART+(CurY%PART!=0)]=='x')
+				 ||(AIMaze[CurX/PART][CurY/PART]=='B'
+				 || AIMaze[CurX/PART+(CurX%PART!=0)][CurY/PART]=='B'
+				 || AIMaze[CurX/PART][CurY/PART+(CurY%PART!=0)]=='B'))
+				 {
+					int CurrentKey=-1;
+					if (BlokeList[i].LeftKey) CurrentKey=0; else
+					if (BlokeList[i].RightKey) CurrentKey=1; else
+					if (BlokeList[i].UpKey) CurrentKey=2; else
+					if (BlokeList[i].DownKey) CurrentKey=3;
+					BlokeList[i].LeftKey=FALSE;
+					BlokeList[i].RightKey=FALSE;
+					BlokeList[i].UpKey=FALSE;
+					BlokeList[i].DownKey=FALSE;
+					if (Count[0]>0) {
+						for (j=CurX/PART-1; AIMaze[j][CurY/PART]=='x'; j--);
+						if (AIMaze[j][CurY/PART]=='f') {BlokeList[i].LeftKey=TRUE;}
+					}
+					if (Count[1]>0) {
+						for (j=CurX/PART+1; AIMaze[j][CurY/PART]=='x'; j++);
+						if (AIMaze[j][CurY/PART]=='f') {BlokeList[i].RightKey=TRUE;}
+					}
+					if (Count[2]>0) {
+						for (j=CurY/PART-1; AIMaze[CurX/PART][j]=='x'; j--);
+						if (AIMaze[CurX/PART][j]=='f') {BlokeList[i].UpKey=TRUE;}
+					}
+					if (Count[3]>0) {
+						for (j=CurY/PART+1; AIMaze[CurX/PART][j]=='x'; j++);
+						if (AIMaze[CurX/PART][j]=='f') BlokeList[i].DownKey=TRUE;
+					}
+
+					// if two escape routes, which is quickest off this square?
+					if (BlokeList[i].LeftKey && BlokeList[i].RightKey) {
+						BlokeList[i].LeftKey=FALSE;
+					}
+					if (BlokeList[i].UpKey && BlokeList[i].DownKey) {
+						 BlokeList[i].UpKey=FALSE;
+					}
+					if ((BlokeList[i].LeftKey || BlokeList[i].RightKey) &&
+						 (BlokeList[i].UpKey || BlokeList[i].DownKey)) {
+						 if (random(2)==0) {
+							BlokeList[i].LeftKey=BlokeList[i].RightKey=FALSE;
+						 } else {
+							BlokeList[i].UpKey=BlokeList[i].DownKey=FALSE;
+						 }
+					}
+
+/*					if (BlokeList[i].LeftKey && (BlokeList[i].UpKey || BlokeList[i].DownKey))
+						 BlokeList[i].LeftKey=FALSE;
+					if (BlokeList[i].RightKey && (BlokeList[i].UpKey || BlokeList[i].DownKey))
+						 BlokeList[i].RightKey=FALSE;*/
+					// if no escape route, then choose direction with most
+					// run-onable squares.  On reaching a junction, a choice
+					// can then be made to avoid the explosion.  This direction
+					// was chosen earlier
+					if (!BlokeList[i].LeftKey && !BlokeList[i].RightKey && !BlokeList[i].UpKey && !BlokeList[i].DownKey)
+					switch (CurrentKey) {
+						case 0 : BlokeList[i].LeftKey=TRUE; break;
+						case 1 : BlokeList[i].RightKey=TRUE; break;
+						case 2 : BlokeList[i].UpKey=TRUE; break;
+						case 3 : BlokeList[i].DownKey=TRUE; break;
+					}
+				} /*if on explosion*/ else {
+				// if not on an explosion but current key puts bloke on one, then
+				// don't move at all!
+					if (BlokeList[i].LeftKey && CurX%PART==0 && (AIMaze[CurX/PART-1][CurY/PART]=='x' || AIMaze[CurX/PART-1][CurY/PART]=='X' || AIMaze[CurX/PART-1][CurY/PART]=='b'))
+							BlokeList[i].LeftKey=FALSE;
+					if (BlokeList[i].RightKey && CurX%PART==0 && (AIMaze[CurX/PART+1][CurY/PART]=='x' || AIMaze[CurX/PART+1][CurY/PART]=='X' || AIMaze[CurX/PART+1][CurY/PART]=='b'))
+							BlokeList[i].RightKey=FALSE;
+					if (BlokeList[i].UpKey && CurY%PART==0 && (AIMaze[CurX/PART][CurY/PART-1]=='x' || AIMaze[CurX/PART][CurY/PART-1]=='X' || AIMaze[CurX/PART][CurY/PART-1]=='b'))
+							BlokeList[i].UpKey=FALSE;
+					if (BlokeList[i].DownKey && CurY%PART==0 && (AIMaze[CurX/PART][CurY/PART+1]=='x' || AIMaze[CurX/PART][CurY/PART+1]=='X' || AIMaze[CurX/PART][CurY/PART+1]=='b'))
+							BlokeList[i].DownKey=FALSE;
+				 // if not standing still and not on an explosion, drop a bomb?
+				 if (BlokeList[i].LeftKey || BlokeList[i].RightKey || BlokeList[i].UpKey || BlokeList[i].DownKey) {
+					if (BlokeList[i].LeftKey) Direction=LEFT;
+					if (BlokeList[i].RightKey) Direction=RIGHT;
+					if (BlokeList[i].UpKey) Direction=UP;
+					if (BlokeList[i].DownKey) Direction=DOWN;
+					// if on a whole square, then if can escape in direction
+					// currently moving, then perhaps drop a bomb
+					if (CurX%PART==0 && CurY%PART==0) {
+/*					 x=0;
+					 for (j=0; j<4; j++) x+=(Count[j]>0); */
+					 if (/*x>1 && */CanEscape(CurX/PART, CurY/PART, BlokeList[i].BombStrength, Direction, AIMaze)) {
+							if (NearAnotherBloke(i))
+							  DropBomb(i);
+					 }
+					 // Restore Maze
+					}
+				 } /*if not standing, drop a bomb? else*/ {
+					// BlokeList[i].Direction=NONE;
+				 }
+				} // if on explosion..else..
+				// O.K. Now, here the bloke's co-ordinates are temporarily
+				// updated so that things do not happen simultaneously,
+				// e.g. two blokes think they can move but when both do
+				// so at same time they fuck each other up.
+				switch (Direction) {
+					case LEFT : BlokeList[i].XPos-=bs; break;
+					case RIGHT : BlokeList[i].XPos+=bs; break;
+					case UP : BlokeList[i].YPos-=bs; break;
+					case DOWN : BlokeList[i].YPos+=bs; break;
+				}
+			} // if computer controlled
+		}	// for (i=0; i<NUMBLOKES; i++)
+		// restore co-ordinates
+		for (i=0; i<NUMBLOKES; i++) {
+		  BlokeList[i].XPos=X[i];
+        BlokeList[i].YPos=Y[i];
+		}
+/*********************************************************************/
+/*                     Alter Bloke Positions                         */
+/*********************************************************************/
+		int NumDead=0;
+		int BlokeSpeed;
+		for (i=0; i<NUMBLOKES; i++) {
+		  if (BlokeList[i].Life<STARTLIFE) {
+			  if (BlokeList[i].Life>0) BlokeList[i].Life--; else
+				  NumDead++;
+		  } else if (BlokeList[i].Life==STARTLIFE) {
+			 x=BlokeList[i].XPos;
+			 y=BlokeList[i].YPos;
+			 BlokeList[i].Direction=NONE;
+			 BlokeSpeed=SPEED*(BlokeList[i].Speed+1);
+			 if (BlokeList[i].UpKey) {
+			  if (CanMove(UP, i, Maze)) {
+				BlokeList[i].YPos-=BlokeSpeed;
+				y=BlokeList[i].YPos;
+				BlokeList[i].Direction=UP;
+			  } else {
+			 // if can't go up then go in last across direction
+			 // assign 2 to Left or Right key so that we know that
+			 // this is not an actual key press.  This way the value can
+			 // be set to FALSE otherwise the key would never be detected
+			 // as being released.
+				if (BlokeList[i].LastDirection==LEFT && !BlokeList[i].LeftKey) BlokeList[i].LeftKey=2;
+				if (BlokeList[i].LastDirection==RIGHT && !BlokeList[i].RightKey) BlokeList[i].RightKey=2;
+			  }
+			 }
+
+			 if (BlokeList[i].DownKey) {
+			  if (CanMove(DOWN, i, Maze)) {
+				BlokeList[i].YPos+=BlokeSpeed;
+				y=BlokeList[i].YPos;
+				BlokeList[i].Direction=DOWN;
+			  } else {
+				if (BlokeList[i].LastDirection==LEFT && !BlokeList[i].LeftKey) BlokeList[i].LeftKey=2;
+				if (BlokeList[i].LastDirection==RIGHT && !BlokeList[i].RightKey) BlokeList[i].RightKey=2;
+			  }
+			 }
+
+			 if (BlokeList[i].LeftKey) {
+			  if (CanMove(LEFT, i, Maze)) {
+				BlokeList[i].XPos-=BlokeSpeed;
+				x=BlokeList[i].XPos;
+				BlokeList[i].Direction=LEFT;
+			  } else {
+				if (BlokeList[i].LastDirection==UP && !BlokeList[i].UpKey) BlokeList[i].UpKey=2;
+				if (BlokeList[i].LastDirection==DOWN && !BlokeList[i].DownKey) BlokeList[i].DownKey=2;
+			  }
+			  if (BlokeList[i].LeftKey==2) BlokeList[i].LeftKey=FALSE;
+			 }
+
+			 if (BlokeList[i].RightKey) {
+			  if (CanMove(RIGHT, i, Maze)) {
+				BlokeList[i].XPos+=BlokeSpeed;
+				x=BlokeList[i].XPos;
+				BlokeList[i].Direction=RIGHT;
+			  } else {
+				if (BlokeList[i].LastDirection==UP && !BlokeList[i].UpKey) BlokeList[i].UpKey=2;
+				if (BlokeList[i].LastDirection==DOWN && !BlokeList[i].DownKey) BlokeList[i].DownKey=2;
+			  }
+			  if (BlokeList[i].RightKey==2) BlokeList[i].RightKey=FALSE;
+			 }
+		  // Process Up and Down again incase of changes in Left and Right
+		  // processing have caused artificial key presses
+			 if (BlokeList[i].DownKey==2) {
+			  if (CanMove(DOWN, i, Maze)) {
+				  BlokeList[i].YPos+=BlokeSpeed;
+				  y=BlokeList[i].YPos;
+				  BlokeList[i].Direction=DOWN;
+			  }
+			  BlokeList[i].DownKey=FALSE;
+			 }
+
+			 if (BlokeList[i].UpKey==2) {
+			  if (CanMove(UP, i, Maze)) {
+				  BlokeList[i].YPos-=BlokeSpeed;
+				  y=BlokeList[i].YPos;
+				  BlokeList[i].Direction=UP;
+			  }
+			  BlokeList[i].UpKey=FALSE;
+			 }
+			 if (BlokeList[i].Direction!=NONE)
+				BlokeList[i].LastDirection=BlokeList[i].Direction;
+			 if (Exploded[x/PART][y/PART] ||
+				  Exploded[x/PART+(x%PART!=0)][y/PART] ||
+				  Exploded[x/PART][y/PART+(y%PART!=0)]) {
+					  BlokeList[i].Life=STARTLIFE-1;
+					  WaveRequest=2;
+				  }
+			 for (j=0; j<MAXCRATES; j++) {
+				if (PowerUpList[j].Id!=-1) {
+					int Px=PowerUpList[j].MazeX;
+					int Py=PowerUpList[j].MazeY;
+					if ( (Px==x/PART && Py==y/PART) ||
+						  ( (Px==x/PART+(x%PART!=0)) && Py==y/PART ) ||
+						  ( Px==x/PART && Py==(y/PART+(y%PART!=0)) )   ) {
+						  switch (PowerUpList[j].Id) {
+							  case 0 : BlokeList[i].NumBombs++; break;
+							  case 1 : BlokeList[i].BombStrength++; break;
+							  case 2 : BlokeList[i].Boot=TRUE; break;
+							  case 3 : BlokeList[i].Speed=!BlokeList[i].Speed;
+										  if (BlokeList[i].Speed) {
+											  if (x%32==8)
+												 BlokeList[i].XPos+=8;
+											  if (x%32==24)
+												 BlokeList[i].XPos-=8;
+											  if (y%32==8)
+												 BlokeList[i].YPos+=8;
+											  if (y%32==24)
+												 BlokeList[i].YPos-=8;
+										  }
+										  break;
+						  }
+						  PowerUpList[j].Id=-1;
+					}
+				}
+			 }
+		  } // end of (else bloke still alive)
+		} // end of for (each bloke)
+		if (NumDead==NUMBLOKES-1 && IsVictory!=1) {
+			for (i=0; i<NUMBLOKES; i++) {
+				 if (BlokeList[i].Life==STARTLIFE) {
+					 if (!IsVictory)
+						IsVictory=16;
+					 else
+					   IsVictory--; // countdown to victory
+					 if (IsVictory==1) {
+						 NextMidi(VICTORYTUNE);
+						 BlokeList[i].Points++;
+						 BlokeList[i].Life=STARTLIFE+1;
+						 GameStage=3;
+						 WinState=WIN;
+						 FlagPos=479-208;
+						 FlagDir=-FLAGSPEED;
+					 }
+				 }
+			}
+		} else {
+		  if (NumDead==NUMBLOKES) {
+			 if (!IsVictory) IsVictory=10; else
+				IsVictory--;
+				if (IsVictory==1) {
+					GameStage=3;
+					WinState=DRAW;
+					NextMidi(DRAWTUNE);
+					//PressAKey=new TDib(h, WINNER2);
+					FlagPos=479-176;
+					FlagDir=-FLAGSPEED;
+				}
+		  }
+		}
+		DrawScreen();
+}
+
+BOOL
+TBombBlokeWin::InSight(int cx, int cy, int x, int y, int range)
+{
+   int i;
+   BOOL Blocked;
+			 if (cx==x) { // Crate Vertically Aligned
+				if (cy-y>0 && cy-y<=range) { // In range and below bloke
+					Blocked=FALSE;
+					for (i=y; i<cy; i++)
+						if (Maze[x][i]=='I')
+							Blocked=TRUE;
+					if (!Blocked)
+					  return DOWN;
+				}
+				if (y-cy>0 && y-cy<=range) { // In range and above bloke
+					Blocked=FALSE;
+					for (i=y; i>cy; i--)
+						if (Maze[x][i]=='I')
+							Blocked=TRUE;
+					if (!Blocked)
+					  return UP;
+				}
+			 }
+			 if (cy==y) { // Crate Horizontally Aligned
+				if (cx-x>0 && cx-x<=range) { // In range and right of bloke
+					Blocked=FALSE;
+					for (i=x; i<cx; i++)
+						if (Maze[i][y]=='I')
+							Blocked=TRUE;
+					if (!Blocked)
+					  return RIGHT;
+				}
+				if (x-cx>0 && x-cx<=range) { // In range and left of bloke
+					Blocked=FALSE;
+					for (i=x; i>cx; i--)
+						if (Maze[i][y]=='I')
+							Blocked=TRUE;
+					if (!Blocked)
+					  return LEFT;
+				}
+			 }
+  return FALSE;
+}
+
+BOOL
+TBombBlokeWin::NearAnotherBloke(int Bloke)
+{
+	int x=BlokeList[Bloke].XPos/PART;
+	int y=BlokeList[Bloke].YPos/PART;
+	int bs=BlokeList[Bloke].BombStrength;
+	int ox, oy, cx, cy;
+	int Crate;
+	int OtherBloke;
+	for (OtherBloke=0; OtherBloke<NUMBLOKES; OtherBloke++) {
+	  if (OtherBloke!=Bloke && BlokeList[OtherBloke].Life==STARTLIFE) {
+		  ox=BlokeList[OtherBloke].XPos/PART;
+		  oy=BlokeList[OtherBloke].YPos/PART;
+		  if (InSight(ox, oy, x, y, bs))
+			 return TRUE;
+	  }
+	}
+	for (Crate=0; Crate<=LastCrate; Crate++) {
+			 if (CrateList[Crate].Timer!=CRATESTART)
+				continue;
+			 cx=CrateList[Crate].MazeX;
+			 cy=CrateList[Crate].MazeY;
+			 if (InSight(cx, cy, x, y, bs))
+				return TRUE;
+	}
+	return FALSE;
+}
+
+BOOL
+TBombBlokeWin::CanMove(int Direction, int Bloke, int Maze[MAZESIZEX][MAZESIZEY])
+{
+	int x=BlokeList[Bloke].XPos;
+	int y=BlokeList[Bloke].YPos;
+	BOOL OnBomb=Maze[x/PART][y/PART]=='B' ||
+					Maze[x/PART][y/PART+(y%PART!=0)]=='B' ||
+					Maze[x/PART+(x%PART!=0)][y/PART]=='B';
+	int Move, bl, Intended;
+   int BlokeSpeed=SPEED*(BlokeList[Bloke].Speed+1);
+	if (Direction==UP) {
+		 Intended=Maze[x/PART][(y-BlokeSpeed)/PART];
+		 if ((x%PART==0) && (Intended>='a' || (OnBomb && Intended=='B'))) {
+				Move=y-BlokeSpeed;
+				for (bl=0; bl<NUMBLOKES; bl++) {
+				  if (bl!=Bloke && Move<BlokeList[bl].YPos+32 &&
+						  BlokeList[bl].YPos<y &&
+							  BlokeList[bl].XPos==x &&
+								  BlokeList[bl].Life==STARTLIFE)
+						break;
+				  if (bl==NUMBLOKES-1)
+					 return TRUE;
+				}
+		 }
+	}
+	if (Direction==DOWN) {
+		 Intended=Maze[x/PART][(y+BlokeSpeed)/PART+((y+BlokeSpeed)%PART!=0)];
+		 if ((x%PART==0) && (Intended>='a' || (OnBomb && Intended=='B'))) {
+				Move=y+BlokeSpeed;
+				for (bl=0; bl<NUMBLOKES; bl++) {
+				  if (bl!=Bloke && Move+32>BlokeList[bl].YPos &&
+						  BlokeList[bl].YPos>y &&
+							  BlokeList[bl].XPos==x &&
+								  BlokeList[bl].Life==STARTLIFE)
+						break;
+				  if (bl==NUMBLOKES-1)
+					 return TRUE;
+				}
+		 }
+	}
+	if (Direction==LEFT) {
+		 Intended=Maze[(x-BlokeSpeed)/PART][y/PART];
+		 if ((y%PART==0) && (Intended>='a' || (OnBomb && Intended=='B'))) {
+				Move=x-BlokeSpeed;
+				for (bl=0; bl<NUMBLOKES; bl++) {
+				  if (bl!=Bloke && Move<BlokeList[bl].XPos+32 &&
+						  BlokeList[bl].XPos<x &&
+							  BlokeList[bl].YPos==y &&
+								  BlokeList[bl].Life==STARTLIFE)
+						break;
+				  if (bl==NUMBLOKES-1)
+					 return TRUE;
+				}
+		 }
+	}
+	if (Direction==RIGHT) {
+		 Intended=Maze[(x+BlokeSpeed)/PART+((x+BlokeSpeed)%PART!=0)][y/PART];
+		 if ((y%PART==0) && (Intended>='a' || (OnBomb && Intended=='B'))) {
+				Move=x+BlokeSpeed;
+				for (bl=0; bl<NUMBLOKES; bl++) {
+				  if (bl!=Bloke && Move+32>BlokeList[bl].XPos &&
+						  BlokeList[bl].XPos>x &&
+							  BlokeList[bl].YPos==y &&
+								  BlokeList[bl].Life==STARTLIFE)
+						break;
+				  if (bl==NUMBLOKES-1)
+					 return TRUE;
+				}
+		 }
+	}
+	return FALSE;
+}
+
+int
+TBombBlokeWin::WhatSquareX(int Bloke)
+{
+	if (BlokeList[Bloke].XPos%PART > PART/2)
+		return BlokeList[Bloke].XPos/PART+1; else
+		return BlokeList[Bloke].XPos/PART;
+}
+
+int
+TBombBlokeWin::WhatSquareY(int Bloke)
+{
+	if (BlokeList[Bloke].YPos%PART > PART/2)
+		return BlokeList[Bloke].YPos/PART+1; else
+		return BlokeList[Bloke].YPos/PART;
+}
+
+void
+TBombBlokeWin::DropBomb(int Bloke)
+{
+	if (IsVictory>0)
+	  return;
+	int i, Pos=MAXBOMBS;
+	int count=0;
+   int x, y;
+	if (Bloke!=-1) {
+	  x=WhatSquareX(Bloke);
+	  y=WhatSquareY(Bloke);
+	} else {
+	  do {
+		 x=random(MAZESIZEX-2)+1;
+		 y=random(MAZESIZEY-2)+1;
+		 count++;
+	  } while (count<25 && Maze[x][y]!='f');
+	  if (Maze[x][y]!='f')
+		 return;
+//	  MessageNumber(x);
+//	  MessageNumber(y);
+	}
+	BOOL BombHereAlready=FALSE;
+	for (i=0; i<MAXBOMBS; i++) {
+	  if (BombQueue[i].Timer>0) {
+		 if (BombQueue[i].MazeX==x && BombQueue[i].MazeY==y) {
+			 BombHereAlready=TRUE;
+		 }
+	  } else {
+		 Pos=i; // Potential slot for new bomb
+	  }
+	}
+	if (!BombHereAlready && Pos<MAXBOMBS && (BlokeList[Bloke].NumBombs>0 || Bloke==-1)) {
+	  BombQueue[Pos].Timer=BOMBSTART;
+	  BombQueue[Pos].MazeX=x;
+	  BombQueue[Pos].MazeY=y;
+	  BombQueue[Pos].PulseState=0;
+	  BombQueue[Pos].Owner=(Bloke==-1 ? 4 : Bloke);
+	  BombQueue[Pos].Strength=(Bloke==-1 ? 10 : BlokeList[Bloke].BombStrength);
+	  if (Bloke!=-1)
+		 BlokeList[Bloke].NumBombs--;
+	  Maze[BombQueue[Pos].MazeX][BombQueue[Pos].MazeY]='B';
+	  // A small 'b' is put here so that it can be walked through
+	  // After PART/SPEED game cycles, this is changed to 'B'
+	}
+}
+
+void
+TBombBlokeWin::EvKeyDown(uint Key, uint, uint f)
+{
+	{
+	  if (GameStage==3 && (f&16384)==0) {
+		  delete PressAKey;
+		  PressAKey=NULL;
+		  for (int j=0; j<NUMBLOKES; j++) {
+			  if (BlokeList[j].Points==GamesToWin) {
+				  GameStage=4;
+				  PressAKey=new TDib(h, WINNER1);
+				  Winner=j;
+			  }
+		  }
+		  if (GameStage!=4)
+			 ResetRequest=TRUE;
+	  }
+	}
+/*	char s[100];
+	sprintf(s, "%i", Key);
+	MessageBox(s);
+	return; */
+		if (Key==Keys[0][LEFT]) { if (!BlokeList[0].Control==COMPUTER) BlokeList[0].LeftKey=TRUE; } // Arrow Keys
+		if (Key==Keys[0][UP]) { if (!BlokeList[0].Control==COMPUTER) BlokeList[0].UpKey=TRUE; }
+		if (Key==Keys[0][RIGHT]) { if (!BlokeList[0].Control==COMPUTER) BlokeList[0].RightKey=TRUE; }
+		if (Key==Keys[0][DOWN]) { if (!BlokeList[0].Control==COMPUTER) BlokeList[0].DownKey=TRUE; }
+		if (Key==Keys[1][LEFT]) { if (NUMBLOKES>1 && !BlokeList[1].Control==COMPUTER) BlokeList[1].LeftKey=TRUE; } // PgUp Keys
+		if (Key==Keys[1][UP]) { if (NUMBLOKES>1 && !BlokeList[1].Control==COMPUTER) BlokeList[1].UpKey=TRUE; }
+		if (Key==Keys[1][RIGHT]) { if (NUMBLOKES>1 && !BlokeList[1].Control==COMPUTER) BlokeList[1].RightKey=TRUE; }
+		if (Key==Keys[1][DOWN]) { if (NUMBLOKES>1 && !BlokeList[1].Control==COMPUTER) BlokeList[1].DownKey=TRUE; }
+		if (Key==Keys[2][LEFT]) { if (NUMBLOKES>2 && !BlokeList[2].Control==COMPUTER) BlokeList[2].LeftKey=TRUE; } // number keys
+		if (Key==Keys[2][UP]) { if (NUMBLOKES>2 && !BlokeList[2].Control==COMPUTER) BlokeList[2].UpKey=TRUE; }
+		if (Key==Keys[2][RIGHT]) { if (NUMBLOKES>2 && !BlokeList[2].Control==COMPUTER) BlokeList[2].RightKey=TRUE; }
+		if (Key==Keys[2][DOWN]) { if (NUMBLOKES>2 && !BlokeList[2].Control==COMPUTER) BlokeList[2].DownKey=TRUE; }
+		if (Key==Keys[3][LEFT]) { if (NUMBLOKES>3 && !BlokeList[3].Control==COMPUTER) BlokeList[3].LeftKey=TRUE; }  // Shift key set
+		if (Key==Keys[3][UP]) { if (NUMBLOKES>3 && !BlokeList[3].Control==COMPUTER) BlokeList[3].UpKey=TRUE; }
+		if (Key==Keys[3][RIGHT]) { if (NUMBLOKES>3 && !BlokeList[3].Control==COMPUTER) BlokeList[3].RightKey=TRUE; }
+		if (Key==Keys[3][DOWN]) { if (NUMBLOKES>3 && !BlokeList[3].Control==COMPUTER) BlokeList[3].DownKey=TRUE; }
+				/******** !!!!!!!!!BOMBS!!!!!!!!! ******/
+		if (Key==Keys[0][0]) { if (!BlokeList[0].Control==COMPUTER && BlokeList[0].Life==STARTLIFE) DropBomb(0); }
+		if (Key==Keys[1][0]) { if (!BlokeList[1].Control==COMPUTER && BlokeList[1].Life==STARTLIFE) DropBomb(1); }
+		if (Key==Keys[2][0]) { if (!BlokeList[2].Control==COMPUTER && BlokeList[2].Life==STARTLIFE) DropBomb(2); }
+		if (Key==Keys[3][0]) { if (!BlokeList[3].Control==COMPUTER && BlokeList[3].Life==STARTLIFE) DropBomb(3); }
+}
+
+void
+TBombBlokeWin::EvKeyUp(uint Key, uint, uint)
+{
+	switch(Key) {
+		case 37 : if (!BlokeList[0].Control==COMPUTER) BlokeList[0].LeftKey=FALSE; break; // Arrow Keys
+		case 38 : if (!BlokeList[0].Control==COMPUTER) BlokeList[0].UpKey=FALSE; break;
+		case 39 : if (!BlokeList[0].Control==COMPUTER) BlokeList[0].RightKey=FALSE; break;
+		case 40 : if (!BlokeList[0].Control==COMPUTER) BlokeList[0].DownKey=FALSE; break;
+		case 46 : if (NUMBLOKES>1 && !BlokeList[1].Control==COMPUTER) BlokeList[1].LeftKey=FALSE; break; // PgUp Keys
+		case 36 : if (NUMBLOKES>1 && !BlokeList[1].Control==COMPUTER) BlokeList[1].UpKey=FALSE; break;
+		case 34 : if (NUMBLOKES>1 && !BlokeList[1].Control==COMPUTER) BlokeList[1].RightKey=FALSE; break;
+		case 35 : if (NUMBLOKES>1 && !BlokeList[1].Control==COMPUTER) BlokeList[1].DownKey=FALSE; break;
+		case 97 : if (NUMBLOKES>2 && !BlokeList[2].Control==COMPUTER) BlokeList[2].LeftKey=FALSE; break; // number keys
+		case 101 : if (NUMBLOKES>2 && !BlokeList[2].Control==COMPUTER) BlokeList[2].UpKey=FALSE; break;
+		case 99 : if (NUMBLOKES>2 && !BlokeList[2].Control==COMPUTER) BlokeList[2].RightKey=FALSE; break;
+		case 98 : if (NUMBLOKES>2 && !BlokeList[2].Control==COMPUTER) BlokeList[2].DownKey=FALSE; break;
+		case 16 : if (NUMBLOKES>3 && !BlokeList[3].Control==COMPUTER) BlokeList[3].LeftKey=FALSE; break;  // Shift key set
+		case 65 : if (NUMBLOKES>3 && !BlokeList[3].Control==COMPUTER) BlokeList[3].UpKey=FALSE; break;
+		case 90 : if (NUMBLOKES>3 && !BlokeList[3].Control==COMPUTER) BlokeList[3].RightKey=FALSE; break;
+		case 220 : if (NUMBLOKES>3 && !BlokeList[3].Control==COMPUTER) BlokeList[3].DownKey=FALSE; break;
+				/******** !!!!!!!!!BOMBS!!!!!!!!! ******/
+	}
+}
+
+void
+TBombBlokeWin::CmHelp(WPARAM wp)
+{
+	switch (wp) {
+		case CM_HELP_CONTENTS :
+			 WinHelp("bombriot.hlp", HELP_CONTENTS, 0);
+			 break;
+		case CM_HELP_ABOUT :
+			 break;
+	}
+}
+
+class TBombBlokeApp : public TApplication
+{
+	public:
+	  TBombBlokeApp(char far* name) : TApplication(name) {};
+	  void InitMainWindow();
+	  TFrameWindow* Frame;
+};
+
+void
+TBombBlokeWin::EvTimer(uint /*TimerId*/)
+{
+}
+
+void
+TBombBlokeWin::CmStart()
+{
+	 NextMidi(OPTIONSTUNE);
+	 if (GameStage>=3) {
+		 delete PressAKey;
+		 PressAKey=NULL;
+	 }
+	 GameStage=1; // Selecting Options;
+	 for (int i=0; i<NUMBLOKES; i++)
+		 BlokeList[i].Points=0;
+	 tagRECT r;
+	 r.top=0; r.left=0; r.right=639; r.bottom=479;
+  ::FillRect(MemDc, &r, (HBRUSH)TBrush(TColor(123, 132, 100)));
+//	 OpenScreen=new TDib(h, OPENSCREEN);
+//	 DibXY(ScreenBits, 80, 16, OpenScreen);
+//	 delete OpenScreen;
+/*	 if (Style==RANDOM) {
+		 LoadMaze(random(4)*8+random(8));
+	 } else {
+	 }*/
+
+	 Update(0, 0, 639, 416);
+	 OptionsStruct Opt;
+	 Opt.Red=BlokeList[0].Control;
+	 Opt.Green=BlokeList[1].Control;
+	 Opt.Blue=BlokeList[2].Control;
+	 Opt.Purple=BlokeList[3].Control;
+	 Opt.Games=GamesToWin;
+	 Opt.Style=Style;
+	 Opt.Order=Order;
+	 Opt.MegaRiot=TimeOut;
+	 Opt.MazeNumber=MazeNumber+1;
+
+	 TOptionsDialog OD(this, &Opt, (uint*)Keys);
+	 if (OD.Execute()==IDCANCEL) {
+		 CloseWindow();
+		 CloseWindow();
+	 } else {
+		 BlokeList[0].Control=Opt.Red;
+		 BlokeList[1].Control=Opt.Green;
+		 BlokeList[2].Control=Opt.Blue;
+		 BlokeList[3].Control=Opt.Purple;
+		 GamesToWin=Opt.Games;
+		 Style=Opt.Style;
+		 Order=Opt.Order;
+		 TimeOut=Opt.MegaRiot;
+       MazeNumber=Opt.MazeNumber-1;
+		 GameLoop();
+	 }
+//	 UpdateOptionsScreen();
+}
+
+void
+TBombBlokeWin::CmOptions(WPARAM wp)
+{
+	switch (wp) {
+	  case CM_OPTIONSMUSIC :
+			 Music=!Music;
+			 if (!Music)
+				 mciSendCommand(-1, MCI_CLOSE, 0, NULL);
+			 if (Music)
+				 switch (GameStage) {
+					case PLAYING : NextMidi(GAMETUNE);
+                              break; 
+				 }
+			 break;
+	  case CM_OPTIONSSOUND : Sound=!Sound;
+			 if (!Sound)
+				sndPlaySound(NULL, 0);
+			 break;
+	  case CM_OPTIONSFAST : Fast=!Fast;
+          break;
+	}
+}
+
+void
+TBombBlokeWin::CeMusic(TCommandEnabler& ce)
+{
+	ce.SetCheck(Music);
+}
+
+void
+TBombBlokeWin::CeSound(TCommandEnabler& ce)
+{
+	ce.SetCheck(Sound);
+}
+
+void
+TBombBlokeWin::CeFast(TCommandEnabler& ce)
+{
+	ce.SetCheck(Fast);
+}
+
+void
+TBombBlokeApp::InitMainWindow()
+{
+	EnableBWCC();
+	ScreenX=GetSystemMetrics(SM_CXSCREEN);
+	ScreenY=GetSystemMetrics(SM_CYSCREEN);
+	if (ScreenX<=640 || ScreenY<=480) {
+		nCmdShow=SW_SHOWMAXIMIZED;
+	} else {
+		nCmdShow=SW_SHOWNORMAL;
+	}
+	TBombBlokeWin& Client=*new TBombBlokeWin();
+	Frame=new TFrameWindow(0, "Bomb Bloke", &Client, TRUE);
+	Frame->Attr.X=0;
+	Frame->Attr.Y=0;
+	SetMainWindow(Frame);
+	Frame->AssignMenu(MENU_1);
+	Frame->Attr.Style &= ~(WS_MAXIMIZEBOX | WS_THICKFRAME);
+}
+
+DEFINE_RESPONSE_TABLE1(TBombBlokeWin, TWindow)
+  EV_COMMAND(CM_START, CmStart),
+  EV_COMMAND_AND_ID(CM_HELP_CONTENTS, CmHelp),
+  EV_COMMAND_AND_ID(CM_HELP_ABOUT, CmHelp),
+  EV_COMMAND_AND_ID(CM_OPTIONSSOUND, CmOptions),
+  EV_COMMAND_AND_ID(CM_OPTIONSMUSIC, CmOptions),
+  EV_COMMAND_AND_ID(CM_OPTIONSFAST, CmOptions),
+  EV_COMMAND_ENABLE(CM_OPTIONSSOUND, CeSound),
+  EV_COMMAND_ENABLE(CM_OPTIONSMUSIC, CeMusic),
+  EV_COMMAND_ENABLE(CM_OPTIONSFAST, CeFast),
+  EV_WM_LBUTTONDOWN,
+  EV_WM_KEYDOWN,
+  EV_WM_KEYUP,
+  EV_WM_RBUTTONDOWN,
+  EV_WM_TIMER,
+END_RESPONSE_TABLE;
+
+int
+OwlMain(int, char* [])
+{
+   randomize();
+	timercount=0;
+	oldtime=time(NULL);
+	oldtime2=time(NULL);
+	for (int i=0; i<480; i++)
+	  Times640[i]=i*640;
+	return TBombBlokeApp("Bomb Bloke").Run();
+}
+
